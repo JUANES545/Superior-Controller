@@ -9,15 +9,11 @@ import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.example.superiorcontroller.hid.GamepadReportBuilder
 import com.example.superiorcontroller.hid.HidDescriptor
 
-/**
- * Manages the Bluetooth HID Device profile lifecycle:
- * proxy acquisition → app registration → report sending → cleanup.
- *
- * All callbacks fire on the main thread (via context.mainExecutor).
- */
 @SuppressLint("MissingPermission")
 class BluetoothHidManager(private val context: Context) {
 
@@ -31,7 +27,28 @@ class BluetoothHidManager(private val context: Context) {
     private var _isConnected = false
     val isConnected: Boolean get() = _isConnected
 
-    // ── Listener interface ──────────────────────────────────────────────
+    // ── Rate limiting ────────────────────────────────────────────────────
+    private var lastSentReport: ByteArray? = null
+    private var lastSendTimeNs: Long = 0
+    private var pendingReport: ByteArray? = null
+    private val handler = Handler(Looper.getMainLooper())
+
+    var sendCount: Long = 0; private set
+    var skipDedupCount: Long = 0; private set
+    var skipThrottleCount: Long = 0; private set
+    var failCount: Long = 0; private set
+
+    companion object {
+        const val MIN_INTERVAL_MS = 25L
+    }
+
+    private val deferredSendRunnable = Runnable {
+        val report = pendingReport ?: return@Runnable
+        pendingReport = null
+        doSend(report)
+    }
+
+    // ── Listener ─────────────────────────────────────────────────────────
     var listener: Listener? = null
 
     interface Listener {
@@ -41,7 +58,7 @@ class BluetoothHidManager(private val context: Context) {
         fun onLog(message: String)
     }
 
-    // ── HID Device callback ─────────────────────────────────────────────
+    // ── HID callback ─────────────────────────────────────────────────────
     private val hidCallback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
             _isRegistered = registered
@@ -60,22 +77,18 @@ class BluetoothHidManager(private val context: Context) {
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     hostDevice = null
                     _isConnected = false
+                    lastSentReport = null
                     listener?.onConnectionChanged(null, false)
                     listener?.onLog("Host disconnected")
                 }
-                BluetoothProfile.STATE_CONNECTING -> {
-                    listener?.onLog("Connecting to host...")
-                }
-                BluetoothProfile.STATE_DISCONNECTING -> {
-                    listener?.onLog("Disconnecting from host...")
-                }
+                BluetoothProfile.STATE_CONNECTING -> listener?.onLog("Connecting to host...")
+                BluetoothProfile.STATE_DISCONNECTING -> listener?.onLog("Disconnecting from host...")
             }
         }
 
         override fun onGetReport(device: BluetoothDevice?, type: Byte, id: Byte, bufferSize: Int) {
             listener?.onLog("onGetReport type=$type id=$id size=$bufferSize")
-            val report = GamepadReportBuilder.neutralReport()
-            hidDevice?.replyReport(device, type, id, report)
+            hidDevice?.replyReport(device, type, id, GamepadReportBuilder.neutralReport())
         }
 
         override fun onSetReport(device: BluetoothDevice?, type: Byte, id: Byte, data: ByteArray?) {
@@ -87,7 +100,7 @@ class BluetoothHidManager(private val context: Context) {
         }
     }
 
-    // ── Profile service listener ────────────────────────────────────────
+    // ── Profile listener ─────────────────────────────────────────────────
     private val profileListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
             if (profile == BluetoothProfile.HID_DEVICE) {
@@ -107,12 +120,10 @@ class BluetoothHidManager(private val context: Context) {
         }
     }
 
-    // ── Public API ──────────────────────────────────────────────────────
+    // ── Public API ───────────────────────────────────────────────────────
 
     fun isBluetoothAvailable(): Boolean = bluetoothAdapter != null
-
     fun isBluetoothEnabled(): Boolean = bluetoothAdapter?.isEnabled == true
-
     fun isProxyReady(): Boolean = hidDevice != null
 
     fun initialize(): Boolean {
@@ -126,22 +137,16 @@ class BluetoothHidManager(private val context: Context) {
             listener?.onLog("ERROR: Bluetooth is disabled — enable it in Settings")
             return false
         }
-        val result = bluetoothAdapter!!.getProfileProxy(
-            context, profileListener, BluetoothProfile.HID_DEVICE
-        )
-        listener?.onLog(
-            if (result) "Requesting HID Device profile proxy..."
-            else "ERROR: HID Device profile not supported by this device"
-        )
+        val result = bluetoothAdapter!!.getProfileProxy(context, profileListener, BluetoothProfile.HID_DEVICE)
+        listener?.onLog(if (result) "Requesting HID Device profile proxy..." else "ERROR: HID Device profile not supported")
         return result
     }
 
     fun registerApp(): Boolean {
         val hid = hidDevice ?: run {
-            listener?.onLog("ERROR: HID proxy not ready — call initialize() first")
+            listener?.onLog("ERROR: HID proxy not ready")
             return false
         }
-
         val sdpSettings = BluetoothHidDeviceAppSdpSettings(
             "Superior Controller",
             "Android Bluetooth HID Gamepad",
@@ -150,42 +155,73 @@ class BluetoothHidManager(private val context: Context) {
                 .or(BluetoothHidDevice.SUBCLASS2_GAMEPAD.toInt()).toByte(),
             HidDescriptor.GAMEPAD_DESCRIPTOR
         )
-
         val qosOut = BluetoothHidDeviceAppQosSettings(
-            BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
-            800,
-            9,
-            0,
-            11250,
+            BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT, 800, 9, 0, 11250,
             BluetoothHidDeviceAppQosSettings.MAX
         )
-
-        listener?.onLog("Descriptor size: ${HidDescriptor.GAMEPAD_DESCRIPTOR.size} bytes")
-        listener?.onLog("Report size: ${HidDescriptor.REPORT_SIZE} bytes")
-
+        listener?.onLog("Descriptor ${HidDescriptor.GAMEPAD_DESCRIPTOR.size}B, report ${HidDescriptor.REPORT_SIZE}B")
         val success = hid.registerApp(sdpSettings, null, qosOut, context.mainExecutor, hidCallback)
-        listener?.onLog(if (success) "registerApp() called — waiting for callback" else "ERROR: registerApp() returned false")
+        listener?.onLog(if (success) "registerApp() — waiting for callback" else "ERROR: registerApp() returned false")
         return success
     }
 
     fun unregisterApp() {
-        val result = hidDevice?.unregisterApp()
-        listener?.onLog("unregisterApp() result=$result")
+        listener?.onLog("unregisterApp() result=${hidDevice?.unregisterApp()}")
     }
 
-    fun sendReport(report: ByteArray): Boolean {
-        val device = hostDevice ?: return false
-        val hid = hidDevice ?: return false
+    /**
+     * Send a HID report with deduplication and optional throttling.
+     *
+     * @param force If true, bypasses the time throttle (but still deduplicates).
+     *              Use for discrete state changes (button press/release).
+     *              Non-forced sends are rate-limited to [MIN_INTERVAL_MS] for
+     *              continuous updates (joystick axes).
+     */
+    fun sendReport(report: ByteArray, force: Boolean = false): Boolean {
+        if (hostDevice == null || hidDevice == null) return false
         if (report.size != HidDescriptor.REPORT_SIZE) {
-            listener?.onLog("ERROR: report size ${report.size} ≠ expected ${HidDescriptor.REPORT_SIZE}")
+            listener?.onLog("ERROR: report size ${report.size} ≠ ${HidDescriptor.REPORT_SIZE}")
             return false
         }
-        return hid.sendReport(device, 0, report)
+
+        handler.removeCallbacks(deferredSendRunnable)
+
+        val last = lastSentReport
+        if (last != null && last.contentEquals(report)) {
+            skipDedupCount++
+            return true
+        }
+
+        if (!force) {
+            val elapsedMs = (System.nanoTime() - lastSendTimeNs) / 1_000_000
+            if (elapsedMs < MIN_INTERVAL_MS) {
+                pendingReport = report.copyOf()
+                handler.postDelayed(deferredSendRunnable, MIN_INTERVAL_MS - elapsedMs)
+                skipThrottleCount++
+                return true
+            }
+        }
+
+        return doSend(report)
     }
 
-    fun getBondedDevices(): List<BluetoothDevice> {
-        return bluetoothAdapter?.bondedDevices?.toList() ?: emptyList()
+    private fun doSend(report: ByteArray): Boolean {
+        val device = hostDevice ?: return false
+        val hid = hidDevice ?: return false
+        val sent = hid.sendReport(device, 0, report)
+        if (sent) {
+            lastSentReport = report.copyOf()
+            lastSendTimeNs = System.nanoTime()
+            sendCount++
+        } else {
+            failCount++
+        }
+        return sent
     }
+
+    fun statsString(): String = "sent=$sendCount dedup=$skipDedupCount throttle=$skipThrottleCount fail=$failCount"
+
+    fun getBondedDevices(): List<BluetoothDevice> = bluetoothAdapter?.bondedDevices?.toList() ?: emptyList()
 
     fun connectToHost(device: BluetoothDevice): Boolean {
         val hid = hidDevice ?: return false
@@ -195,22 +231,17 @@ class BluetoothHidManager(private val context: Context) {
     }
 
     fun disconnect() {
-        hostDevice?.let { device ->
-            hidDevice?.disconnect(device)
-            listener?.onLog("disconnect() called")
-        }
+        hostDevice?.let { hidDevice?.disconnect(it); listener?.onLog("disconnect() called") }
     }
 
     fun cleanup() {
+        handler.removeCallbacks(deferredSendRunnable)
+        pendingReport = null
         if (_isConnected) disconnect()
         if (_isRegistered) unregisterApp()
-        hidDevice?.let {
-            bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it)
-        }
-        hidDevice = null
-        hostDevice = null
-        _isRegistered = false
-        _isConnected = false
+        hidDevice?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) }
+        hidDevice = null; hostDevice = null; lastSentReport = null
+        _isRegistered = false; _isConnected = false
         listener?.onLog("BluetoothHidManager cleaned up")
     }
 }

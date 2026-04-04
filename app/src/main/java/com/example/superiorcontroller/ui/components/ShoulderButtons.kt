@@ -1,6 +1,8 @@
 package com.example.superiorcontroller.ui.components
 
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -19,9 +21,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -93,7 +95,7 @@ fun ControlButton(
     height: Dp = 38.dp,
     fontSize: Int = 13
 ) {
-    val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
     var pressed by remember { mutableStateOf(false) }
 
     Surface(
@@ -101,16 +103,15 @@ fun ControlButton(
             .width(width)
             .height(height)
             .pointerInput(button) {
-                detectTapGestures(
-                    onPress = {
-                        pressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onPress(button)
-                        tryAwaitRelease()
-                        pressed = false
-                        onRelease(button)
-                    }
-                )
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false).also { it.consume() }
+                    pressed = true
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    onPress(button)
+                    waitForUpOrCancellation()?.consume()
+                    pressed = false
+                    onRelease(button)
+                }
             },
         shape = RoundedCornerShape(8.dp),
         color = if (pressed) color.copy(alpha = 0.6f) else color,

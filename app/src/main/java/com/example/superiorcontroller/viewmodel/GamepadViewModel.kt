@@ -42,6 +42,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _reportsSent = MutableStateFlow(0L)
     val reportsSent: StateFlow<Long> = _reportsSent.asStateFlow()
 
+    private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
+
     private val hidManager = BluetoothHidManager(application.applicationContext)
 
     private val managerListener = object : BluetoothHidManager.Listener {
@@ -56,7 +58,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         hidManager.listener = managerListener
-        addLog("Descriptor mode: ${if (HidDescriptor.EXTENDED_BUTTONS) "12-button" else "8-button"}, report=${HidDescriptor.REPORT_SIZE}B")
+        addLog("Mode: ${if (HidDescriptor.EXTENDED_BUTTONS) "12btn" else "8btn"} | report=${HidDescriptor.REPORT_SIZE}B | throttle=${BluetoothHidManager.MIN_INTERVAL_MS}ms")
     }
 
     // ── Lifecycle ───────────────────────────────────────────────────────
@@ -68,134 +70,119 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun registerHidApp() {
-        if (!hidManager.isProxyReady()) {
-            addLog("Proxy not ready yet — wait or re-initialize")
-            return
-        }
+        if (!hidManager.isProxyReady()) { addLog("Proxy not ready"); return }
         hidManager.registerApp()
     }
 
     fun unregisterHidApp() { hidManager.unregisterApp() }
-
     fun getBondedDevices(): List<BluetoothDevice> = hidManager.getBondedDevices()
-
     fun connectToDevice(device: BluetoothDevice) { hidManager.connectToHost(device) }
 
     // ── Button controls ─────────────────────────────────────────────────
 
     fun pressButton(button: Int) {
-        val prev = _gamepadState.value
-        _gamepadState.value = if (GamepadButtons.isDpad(button)) {
-            prev.withDpadPressed(button)
-        } else {
-            prev.withButtonPressed(button)
-        }
         val state = _gamepadState.value
+
+        if (GamepadButtons.isDpad(button)) {
+            if ((state.dpad and button) != 0) return
+            _gamepadState.value = state.withDpadPressed(button)
+        } else {
+            if (state.isButtonPressed(button)) return
+            _gamepadState.value = state.withButtonPressed(button)
+        }
+
+        val s = _gamepadState.value
         val name = buttonName(button)
-        val report = GamepadReportBuilder.buildReport(state)
-        addLog("▶ PRESS $name mask=0x${"%04X".format(state.buttons)} ${GamepadReportBuilder.describeBytes(state)} hex=[${GamepadReportBuilder.toHexString(report)}]")
-        sendReportWithLog("PRESS $name")
+        val report = GamepadReportBuilder.buildReport(s)
+        addLog("▶ PRESS $name mask=0x${"%04X".format(s.buttons)} ${GamepadReportBuilder.describeBytes(s)} hex=[${GamepadReportBuilder.toHexString(report)}]")
+        sendForced("PRESS $name")
     }
 
     fun releaseButton(button: Int) {
-        val prev = _gamepadState.value
-        _gamepadState.value = if (GamepadButtons.isDpad(button)) {
-            prev.withDpadReleased(button)
-        } else {
-            prev.withButtonReleased(button)
-        }
         val state = _gamepadState.value
+
+        if (GamepadButtons.isDpad(button)) {
+            if ((state.dpad and button) == 0) return
+            _gamepadState.value = state.withDpadReleased(button)
+        } else {
+            if (!state.isButtonPressed(button)) return
+            _gamepadState.value = state.withButtonReleased(button)
+        }
+
+        val s = _gamepadState.value
         val name = buttonName(button)
-        val report = GamepadReportBuilder.buildReport(state)
-        addLog("■ RELEASE $name mask=0x${"%04X".format(state.buttons)} hex=[${GamepadReportBuilder.toHexString(report)}]")
-        sendReportWithLog("RELEASE $name")
+        addLog("■ RELEASE $name mask=0x${"%04X".format(s.buttons)} hex=[${GamepadReportBuilder.toHexString(GamepadReportBuilder.buildReport(s))}]")
+        sendForced("RELEASE $name")
     }
 
     private fun buttonName(button: Int): String = when (button) {
-        GamepadButtons.A -> "A"
-        GamepadButtons.B -> "B"
-        GamepadButtons.X -> "X"
-        GamepadButtons.Y -> "Y"
-        GamepadButtons.LB -> "LB"
-        GamepadButtons.RB -> "RB"
-        GamepadButtons.BACK -> "BACK"
-        GamepadButtons.START -> "START"
-        GamepadButtons.LT -> "LT"
-        GamepadButtons.RT -> "RT"
-        GamepadButtons.L3 -> "L3"
-        GamepadButtons.R3 -> "R3"
-        GamepadButtons.DPAD_UP -> "D↑"
-        GamepadButtons.DPAD_DOWN -> "D↓"
-        GamepadButtons.DPAD_LEFT -> "D←"
-        GamepadButtons.DPAD_RIGHT -> "D→"
+        GamepadButtons.A -> "A"; GamepadButtons.B -> "B"
+        GamepadButtons.X -> "X"; GamepadButtons.Y -> "Y"
+        GamepadButtons.LB -> "LB"; GamepadButtons.RB -> "RB"
+        GamepadButtons.BACK -> "BACK"; GamepadButtons.START -> "START"
+        GamepadButtons.LT -> "LT"; GamepadButtons.RT -> "RT"
+        GamepadButtons.L3 -> "L3"; GamepadButtons.R3 -> "R3"
+        GamepadButtons.DPAD_UP -> "D↑"; GamepadButtons.DPAD_DOWN -> "D↓"
+        GamepadButtons.DPAD_LEFT -> "D←"; GamepadButtons.DPAD_RIGHT -> "D→"
         else -> "0x${"%04X".format(button)}"
     }
 
     // ── Axis controls ───────────────────────────────────────────────────
 
     fun setLeftAxis(normalizedX: Float, normalizedY: Float) {
-        val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt()
-            .coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
-        val y = ((normalizedY + 1f) / 2f * AxisDefaults.MAX).toInt()
-            .coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+        val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+        val y = ((normalizedY + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         _gamepadState.value = _gamepadState.value.withLeftAxis(x, y)
-        sendReport()
+        sendThrottled()
     }
 
     fun setRightAxis(normalizedX: Float, normalizedY: Float) {
-        val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt()
-            .coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
-        val y = ((normalizedY + 1f) / 2f * AxisDefaults.MAX).toInt()
-            .coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+        val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+        val y = ((normalizedY + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         _gamepadState.value = _gamepadState.value.withRightAxis(x, y)
-        sendReport()
+        sendThrottled()
     }
 
-    // ── Report management ───────────────────────────────────────────────
+    // ── Report dispatch ─────────────────────────────────────────────────
 
-    fun sendReport() {
+    private fun sendThrottled() {
         if (!_isConnected.value) return
         val report = GamepadReportBuilder.buildReport(_gamepadState.value)
-        val sent = hidManager.sendReport(report)
-        if (sent) _reportsSent.value++
+        val sent = hidManager.sendReport(report, force = false)
+        if (sent) _reportsSent.value = hidManager.sendCount
     }
 
-    private fun sendReportWithLog(context: String) {
+    private fun sendForced(context: String) {
         if (!_isConnected.value) {
-            addLog("  ⚠ NOT CONNECTED — report not sent ($context)")
+            addLog("  ⚠ NOT CONNECTED ($context)")
             return
         }
         val report = GamepadReportBuilder.buildReport(_gamepadState.value)
-        val sent = hidManager.sendReport(report)
+        val sent = hidManager.sendReport(report, force = true)
+        _reportsSent.value = hidManager.sendCount
         if (sent) {
-            _reportsSent.value++
-            addLog("  ✓ SENT #${_reportsSent.value} ($context)")
+            addLog("  ✓ SENT_FORCED #${hidManager.sendCount} ($context) [${hidManager.statsString()}]")
         } else {
-            addLog("  ✗ SEND FAILED ($context) hex=[${GamepadReportBuilder.toHexString(report)}]")
+            addLog("  ✗ SEND_FAILED ($context) hex=[${GamepadReportBuilder.toHexString(report)}]")
         }
     }
 
     fun sendNeutralReport() {
         _gamepadState.value = _gamepadState.value.neutral()
         val report = GamepadReportBuilder.neutralReport()
-        addLog("NEUTRAL → hex=[${GamepadReportBuilder.toHexString(report)}]")
-        if (!_isConnected.value) {
-            addLog("Not connected — neutral state set locally only")
-            return
-        }
-        val sent = hidManager.sendReport(report)
-        addLog("Neutral report sent: $sent")
-        if (sent) _reportsSent.value++
+        addLog("NEUTRAL hex=[${GamepadReportBuilder.toHexString(report)}] | ${hidManager.statsString()}")
+        if (!_isConnected.value) { addLog("Not connected"); return }
+        val sent = hidManager.sendReport(report, force = true)
+        addLog("Neutral sent=$sent")
+        _reportsSent.value = hidManager.sendCount
     }
 
     fun resetState() {
         _gamepadState.value = GamepadState()
-        addLog("Gamepad state reset to neutral")
+        addLog("State reset | ${hidManager.statsString()}")
     }
 
     // ── Logging ─────────────────────────────────────────────────────────
-
-    private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
     private fun addLog(message: String) {
         val timestamp = timeFormat.format(Date())

@@ -1,6 +1,8 @@
 package com.example.superiorcontroller.ui.components
 
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -16,9 +18,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -62,23 +64,22 @@ fun GamepadFaceButton(
     onRelease: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
     var pressed by remember { mutableStateOf(false) }
 
     Surface(
         modifier = modifier
             .size(size)
             .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        pressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onPress()
-                        tryAwaitRelease()
-                        pressed = false
-                        onRelease()
-                    }
-                )
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false).also { it.consume() }
+                    pressed = true
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    onPress()
+                    waitForUpOrCancellation()?.consume()
+                    pressed = false
+                    onRelease()
+                }
             },
         shape = CircleShape,
         color = if (pressed) color.copy(alpha = 0.6f) else color,
