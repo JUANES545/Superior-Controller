@@ -1,7 +1,7 @@
 package com.example.superiorcontroller.hid
 
 /**
- * Button bitmask values (bits 0–9 map to HID Buttons 1–10).
+ * Button bitmask values (bits 0–10 map to HID Buttons 1–11).
  * LT/RT are analog triggers (Z / Rz axes), not buttons.
  * D-pad identifiers use bits 16+ — routed to the hat switch by the ViewModel.
  */
@@ -16,9 +16,10 @@ object GamepadButtons {
     const val BACK  = 1 shl 6    // 0x040
     const val START = 1 shl 7    // 0x080
 
-    // Byte 1 (low 2 bits): HID Buttons 9–10
+    // Byte 1 (low 3 bits): HID Buttons 9–11
     const val L3    = 1 shl 8    // 0x100
     const val R3    = 1 shl 9    // 0x200
+    const val HOME  = 1 shl 10   // 0x400
 
     // D-pad direction identifiers — NOT in button bitmask, routed to hat switch
     const val DPAD_UP    = 1 shl 16  // 0x10000
@@ -26,7 +27,7 @@ object GamepadButtons {
     const val DPAD_LEFT  = 1 shl 18  // 0x40000
     const val DPAD_RIGHT = 1 shl 19  // 0x80000
 
-    const val BUTTON_MASK = 0x03FF
+    const val BUTTON_MASK = 0x07FF
 
     fun isDpad(value: Int): Boolean = value >= (1 shl 16)
 }

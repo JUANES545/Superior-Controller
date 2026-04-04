@@ -55,6 +55,12 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _soundEnabled = MutableStateFlow(true)
     val soundEnabled: StateFlow<Boolean> = _soundEnabled.asStateFlow()
 
+    private val _triggerMode = MutableStateFlow(SettingsRepository.MODE_ANALOG)
+    val triggerMode: StateFlow<String> = _triggerMode.asStateFlow()
+
+    private val _debugLogVisible = MutableStateFlow(true)
+    val debugLogVisible: StateFlow<Boolean> = _debugLogVisible.asStateFlow()
+
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
     private val settingsRepo = SettingsRepository(application.applicationContext)
@@ -72,7 +78,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         hidManager.listener = managerListener
-        addLog("Mode: 10btn+2trig | report=${HidDescriptor.REPORT_SIZE}B | throttle=${BluetoothHidManager.MIN_INTERVAL_MS}ms")
+        addLog("Mode: 11btn+2trig | report=${HidDescriptor.REPORT_SIZE}B | throttle=${BluetoothHidManager.MIN_INTERVAL_MS}ms")
 
         viewModelScope.launch {
             settingsRepo.hapticsEnabled.collect { enabled ->
@@ -86,6 +92,17 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
                 _soundEnabled.value = enabled
                 ButtonSoundPlayer.enabled = enabled
                 addLog("Settings: sound=${if (enabled) "ON" else "OFF"}")
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.triggerMode.collect { mode ->
+                _triggerMode.value = mode
+                addLog("Settings: triggerMode=$mode")
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.debugLogVisible.collect { visible ->
+                _debugLogVisible.value = visible
             }
         }
     }
@@ -150,6 +167,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         GamepadButtons.LB -> "LB"; GamepadButtons.RB -> "RB"
         GamepadButtons.BACK -> "BACK"; GamepadButtons.START -> "START"
         GamepadButtons.L3 -> "L3"; GamepadButtons.R3 -> "R3"
+        GamepadButtons.HOME -> "HOME"
         GamepadButtons.DPAD_UP -> "D↑"; GamepadButtons.DPAD_DOWN -> "D↓"
         GamepadButtons.DPAD_LEFT -> "D←"; GamepadButtons.DPAD_RIGHT -> "D→"
         else -> "0x${"%04X".format(button)}"
@@ -257,6 +275,14 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     fun toggleSound(enabled: Boolean) {
         viewModelScope.launch { settingsRepo.setSoundEnabled(enabled) }
+    }
+
+    fun setTriggerMode(mode: String) {
+        viewModelScope.launch { settingsRepo.setTriggerMode(mode) }
+    }
+
+    fun toggleDebugLog(visible: Boolean) {
+        viewModelScope.launch { settingsRepo.setDebugLogVisible(visible) }
     }
 
     override fun onCleared() {

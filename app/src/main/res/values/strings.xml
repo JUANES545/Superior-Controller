@@ -24,6 +24,7 @@
     <string name="label_start">START</string>
     <string name="label_left_stick">L</string>
     <string name="label_right_stick">R</string>
+    <string name="label_home">Home</string>
 
     <!-- Debug -->
     <string name="debug_log_title">DEBUG LOG</string>
@@ -34,4 +35,10 @@
     <string name="settings_haptics_desc">Vibrate on button press</string>
     <string name="settings_sound_title">Button sound</string>
     <string name="settings_sound_desc">Play click sound on button press</string>
+    <string name="settings_trigger_mode_title">Trigger interaction</string>
+    <string name="settings_trigger_mode_desc">Choose how LT and RT respond on screen</string>
+    <string name="settings_trigger_analog">Analog</string>
+    <string name="settings_trigger_button">Button</string>
+    <string name="settings_debug_log_title">Debug log</string>
+    <string name="settings_debug_log_desc">Show the debug console on screen</string>
 </resources>

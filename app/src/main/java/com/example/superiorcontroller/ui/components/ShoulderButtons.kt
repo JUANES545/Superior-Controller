@@ -16,8 +16,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +51,7 @@ private val BUMPER_COLOR = Color(0xFFFF9800)
 private val TRIGGER_COLOR = Color(0xFFE65100)
 private val TRIGGER_TRACK = Color(0xFF1A1A2E)
 private val MENU_COLOR = Color(0xFF00897B)
+private val HOME_COLOR = Color(0xFF607D8B)
 private val STICK_CLICK_COLOR = Color(0xFF546E7A)
 
 private val CapsuleShape = RoundedCornerShape(percent = 50)
@@ -56,11 +62,32 @@ private val CapsuleShape = RoundedCornerShape(percent = 50)
 fun TriggerRow(
     onLeftTrigger: (Float) -> Unit,
     onRightTrigger: (Float) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    buttonMode: Boolean = false
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        AnalogTrigger("LT", onValueChanged = onLeftTrigger)
-        AnalogTrigger("RT", onValueChanged = onRightTrigger)
+        GamepadTrigger("LT", onValueChanged = onLeftTrigger, buttonMode = buttonMode)
+        GamepadTrigger("RT", onValueChanged = onRightTrigger, buttonMode = buttonMode)
+    }
+}
+
+/**
+ * Delegates to [AnalogTrigger] or [TriggerButton] based on user preference.
+ * Both modes send the same analog Float values — only the interaction differs.
+ */
+@Composable
+fun GamepadTrigger(
+    label: String,
+    onValueChanged: (Float) -> Unit,
+    buttonMode: Boolean,
+    modifier: Modifier = Modifier,
+    width: Dp = 110.dp,
+    height: Dp = 64.dp
+) {
+    if (buttonMode) {
+        TriggerButton(label, onValueChanged, modifier, width, height)
+    } else {
+        AnalogTrigger(label, onValueChanged, modifier, width = width, height = height)
     }
 }
 
@@ -183,6 +210,47 @@ fun AnalogTrigger(
     }
 }
 
+/**
+ * Button-mode trigger: sends 1.0 on press, 0.0 on release.
+ * Internally still an analog value — Windows sees Z/Rz go from 0 → 255 → 0.
+ */
+@Composable
+fun TriggerButton(
+    label: String,
+    onValueChanged: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    width: Dp = 110.dp,
+    height: Dp = 64.dp
+) {
+    val context = LocalContext.current
+    var pressed by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = modifier
+            .width(width)
+            .height(height)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false).also { it.consume() }
+                    pressed = true
+                    ButtonHaptics.performClick(context, label)
+                    ButtonSoundPlayer.playClick(label)
+                    onValueChanged(1f)
+                    waitForUpOrCancellation()?.consume()
+                    pressed = false
+                    onValueChanged(0f)
+                }
+            },
+        shape = RoundedCornerShape(12.dp),
+        color = if (pressed) TRIGGER_COLOR.copy(alpha = 0.6f) else TRIGGER_COLOR,
+        shadowElevation = if (pressed) 1.dp else 4.dp
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Text(text = label, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = Color.White)
+        }
+    }
+}
+
 // ── Digital buttons ──────────────────────────────────────────────────────
 
 @Composable
@@ -203,9 +271,54 @@ fun MenuButtons(
     onRelease: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        ControlButton("BACK", GamepadButtons.BACK, MENU_COLOR, onPress, onRelease, width = 80.dp)
-        ControlButton("START", GamepadButtons.START, MENU_COLOR, onPress, onRelease, width = 80.dp)
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ControlButton("BACK", GamepadButtons.BACK, MENU_COLOR, onPress, onRelease, width = 72.dp)
+        HomeButton(onPress = onPress, onRelease = onRelease)
+        ControlButton("START", GamepadButtons.START, MENU_COLOR, onPress, onRelease, width = 72.dp)
+    }
+}
+
+@Composable
+fun HomeButton(
+    onPress: (Int) -> Unit,
+    onRelease: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 38.dp
+) {
+    val context = LocalContext.current
+    var pressed by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = modifier
+            .size(size)
+            .pointerInput(GamepadButtons.HOME) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false).also { it.consume() }
+                    pressed = true
+                    ButtonHaptics.performClick(context, "HOME")
+                    ButtonSoundPlayer.playClick("HOME")
+                    onPress(GamepadButtons.HOME)
+                    waitForUpOrCancellation()?.consume()
+                    pressed = false
+                    onRelease(GamepadButtons.HOME)
+                }
+            },
+        shape = CircleShape,
+        color = if (pressed) HOME_COLOR.copy(alpha = 0.6f) else HOME_COLOR,
+        shadowElevation = if (pressed) 1.dp else 4.dp
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Icon(
+                Icons.Default.Home,
+                contentDescription = "Home",
+                tint = Color.White,
+                modifier = Modifier.size(size * 0.55f)
+            )
+        }
     }
 }
 

@@ -45,9 +45,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.superiorcontroller.R
 import com.example.superiorcontroller.ui.components.ActionButtons
-import com.example.superiorcontroller.ui.components.AnalogTrigger
 import com.example.superiorcontroller.ui.components.BumperRow
 import com.example.superiorcontroller.ui.components.ControlButton
+import com.example.superiorcontroller.ui.components.GamepadTrigger
 import com.example.superiorcontroller.ui.components.DPad
 import com.example.superiorcontroller.ui.components.DebugLog
 import com.example.superiorcontroller.ui.components.MenuButtons
@@ -88,6 +88,9 @@ fun GamepadScreen(
 
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
     val soundEnabled by viewModel.soundEnabled.collectAsState()
+    val triggerMode by viewModel.triggerMode.collectAsState()
+    val triggerButtonMode = triggerMode == "button"
+    val debugLogVisible by viewModel.debugLogVisible.collectAsState()
     var showSettings by remember { mutableStateOf(false) }
 
     val onPress: (Int) -> Unit = { viewModel.pressButton(it) }
@@ -114,7 +117,9 @@ fun GamepadScreen(
                 onPress = onPress,
                 onRelease = onRelease,
                 onLeftTrigger = onLeftTrigger,
-                onRightTrigger = onRightTrigger
+                onRightTrigger = onRightTrigger,
+                triggerButtonMode = triggerButtonMode,
+                debugLogVisible = debugLogVisible
             )
         } else {
             PortraitLayout(
@@ -132,7 +137,9 @@ fun GamepadScreen(
                 onPress = onPress,
                 onRelease = onRelease,
                 onLeftTrigger = onLeftTrigger,
-                onRightTrigger = onRightTrigger
+                onRightTrigger = onRightTrigger,
+                triggerButtonMode = triggerButtonMode,
+                debugLogVisible = debugLogVisible
             )
         }
 
@@ -155,8 +162,12 @@ fun GamepadScreen(
         SettingsSheet(
             hapticsEnabled = hapticsEnabled,
             soundEnabled = soundEnabled,
+            triggerMode = triggerMode,
+            debugLogVisible = debugLogVisible,
             onToggleHaptics = { viewModel.toggleHaptics(it) },
             onToggleSound = { viewModel.toggleSound(it) },
+            onTriggerModeChange = { viewModel.setTriggerMode(it) },
+            onToggleDebugLog = { viewModel.toggleDebugLog(it) },
             onDismiss = { showSettings = false }
         )
     }
@@ -180,7 +191,9 @@ private fun PortraitLayout(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
     onLeftTrigger: (Float) -> Unit,
-    onRightTrigger: (Float) -> Unit
+    onRightTrigger: (Float) -> Unit,
+    triggerButtonMode: Boolean,
+    debugLogVisible: Boolean
 ) {
     Column(
         modifier = Modifier
@@ -213,7 +226,7 @@ private fun PortraitLayout(
 
         Spacer(Modifier.height(10.dp))
 
-        TriggerRow(onLeftTrigger = onLeftTrigger, onRightTrigger = onRightTrigger)
+        TriggerRow(onLeftTrigger = onLeftTrigger, onRightTrigger = onRightTrigger, buttonMode = triggerButtonMode)
         Spacer(Modifier.height(4.dp))
         BumperRow(onPress = onPress, onRelease = onRelease)
 
@@ -272,8 +285,11 @@ private fun PortraitLayout(
             ) { Text(stringResource(R.string.btn_clear_log), fontSize = 12.sp) }
         }
 
-        Spacer(Modifier.height(6.dp))
-        DebugLog(messages = logMessages)
+        if (debugLogVisible) {
+            Spacer(Modifier.height(6.dp))
+            DebugLog(messages = logMessages)
+        }
+
         Spacer(Modifier.height(12.dp))
     }
 }
@@ -296,7 +312,9 @@ private fun LandscapeLayout(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
     onLeftTrigger: (Float) -> Unit,
-    onRightTrigger: (Float) -> Unit
+    onRightTrigger: (Float) -> Unit,
+    triggerButtonMode: Boolean,
+    debugLogVisible: Boolean
 ) {
     Column(
         modifier = Modifier
@@ -333,11 +351,13 @@ private fun LandscapeLayout(
             }
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))
 
         // ── Main controls ───────────────────────────────────────
         Row(
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left column: LT, LB, Left stick, L3
@@ -346,16 +366,14 @@ private fun LandscapeLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                AnalogTrigger("LT", onValueChanged = onLeftTrigger, width = 80.dp, height = 44.dp)
-                Spacer(Modifier.height(2.dp))
-                ControlButton("LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease, width = 80.dp, height = 34.dp, fontSize = 12)
-                Spacer(Modifier.height(4.dp))
+                GamepadTrigger("LT", onValueChanged = onLeftTrigger, buttonMode = triggerButtonMode, width = 78.dp, height = 40.dp)
+                ControlButton("LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease, width = 78.dp, height = 32.dp, fontSize = 12)
                 VirtualJoystick(
                     onAxisChanged = { x, y -> viewModel.setLeftAxis(x, y) },
-                    size = 110.dp,
+                    size = 100.dp,
                     label = stringResource(R.string.label_left_stick)
                 )
-                ControlButton("L3", GamepadButtons.L3, Color(0xFF546E7A), onPress, onRelease, width = 50.dp, height = 28.dp, fontSize = 10)
+                ControlButton("L3", GamepadButtons.L3, Color(0xFF546E7A), onPress, onRelease, width = 50.dp, height = 26.dp, fontSize = 10)
             }
 
             // Center: DPad + Menu + ABXY
@@ -383,22 +401,32 @@ private fun LandscapeLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                AnalogTrigger("RT", onValueChanged = onRightTrigger, width = 80.dp, height = 44.dp)
-                Spacer(Modifier.height(2.dp))
-                ControlButton("RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease, width = 80.dp, height = 34.dp, fontSize = 12)
-                Spacer(Modifier.height(4.dp))
+                GamepadTrigger("RT", onValueChanged = onRightTrigger, buttonMode = triggerButtonMode, width = 78.dp, height = 40.dp)
+                ControlButton("RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease, width = 78.dp, height = 32.dp, fontSize = 12)
                 VirtualJoystick(
                     onAxisChanged = { x, y -> viewModel.setRightAxis(x, y) },
-                    size = 110.dp,
+                    size = 100.dp,
                     label = stringResource(R.string.label_right_stick),
                     thumbColor = Color(0xFFFF9800)
                 )
-                ControlButton("R3", GamepadButtons.R3, Color(0xFF546E7A), onPress, onRelease, width = 50.dp, height = 28.dp, fontSize = 10)
+                ControlButton("R3", GamepadButtons.R3, Color(0xFF546E7A), onPress, onRelease, width = 50.dp, height = 26.dp, fontSize = 10)
             }
         }
 
-        // ── Bottom debug ────────────────────────────────────────
-        DebugLog(messages = logMessages, maxHeight = 56.dp, minHeight = 36.dp)
+        // ── Bottom centered debug console ────────────────────────
+        if (debugLogVisible) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                DebugLog(
+                    messages = logMessages,
+                    maxHeight = 72.dp,
+                    minHeight = 44.dp,
+                    modifier = Modifier.fillMaxWidth(0.65f)
+                )
+            }
+        }
     }
 }
 

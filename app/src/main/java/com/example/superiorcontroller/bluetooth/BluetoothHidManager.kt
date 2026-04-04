@@ -88,7 +88,8 @@ class BluetoothHidManager(private val context: Context) {
 
         override fun onGetReport(device: BluetoothDevice?, type: Byte, id: Byte, bufferSize: Int) {
             listener?.onLog("onGetReport type=$type id=$id size=$bufferSize")
-            hidDevice?.replyReport(device, type, id, GamepadReportBuilder.neutralReport())
+            val report = lastSentReport?.copyOf() ?: GamepadReportBuilder.neutralReport()
+            hidDevice?.replyReport(device, type, id, report)
         }
 
         override fun onSetReport(device: BluetoothDevice?, type: Byte, id: Byte, data: ByteArray?) {
