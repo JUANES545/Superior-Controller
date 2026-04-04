@@ -44,6 +44,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.superiorcontroller.R
+import com.example.superiorcontroller.hid.AxisDefaults
+import com.example.superiorcontroller.hid.TriggerDefaults
 import com.example.superiorcontroller.ui.components.ActionButtons
 import com.example.superiorcontroller.ui.components.BumperRow
 import com.example.superiorcontroller.ui.components.ControlButton
@@ -98,6 +100,16 @@ fun GamepadScreen(
     val onLeftTrigger: (Float) -> Unit = { viewModel.setLeftTrigger(it) }
     val onRightTrigger: (Float) -> Unit = { viewModel.setRightTrigger(it) }
 
+    // Derive visual-feedback values from the live gamepad state
+    val gs by viewModel.gamepadState.collectAsState()
+    val gsButtons = gs.buttons or gs.dpad
+    val gsLeftX = (gs.leftX - AxisDefaults.CENTER.toFloat()) / AxisDefaults.CENTER
+    val gsLeftY = (gs.leftY - AxisDefaults.CENTER.toFloat()) / AxisDefaults.CENTER
+    val gsRightX = (gs.rightX - AxisDefaults.CENTER.toFloat()) / AxisDefaults.CENTER
+    val gsRightY = (gs.rightY - AxisDefaults.CENTER.toFloat()) / AxisDefaults.CENTER
+    val gsLT = gs.leftTrigger.toFloat() / TriggerDefaults.MAX
+    val gsRT = gs.rightTrigger.toFloat() / TriggerDefaults.MAX
+
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isLandscape = maxWidth > maxHeight
 
@@ -119,7 +131,11 @@ fun GamepadScreen(
                 onLeftTrigger = onLeftTrigger,
                 onRightTrigger = onRightTrigger,
                 triggerButtonMode = triggerButtonMode,
-                debugLogVisible = debugLogVisible
+                debugLogVisible = debugLogVisible,
+                gsButtons = gsButtons,
+                gsLeftX = gsLeftX, gsLeftY = gsLeftY,
+                gsRightX = gsRightX, gsRightY = gsRightY,
+                gsLT = gsLT, gsRT = gsRT
             )
         } else {
             PortraitLayout(
@@ -139,7 +155,11 @@ fun GamepadScreen(
                 onLeftTrigger = onLeftTrigger,
                 onRightTrigger = onRightTrigger,
                 triggerButtonMode = triggerButtonMode,
-                debugLogVisible = debugLogVisible
+                debugLogVisible = debugLogVisible,
+                gsButtons = gsButtons,
+                gsLeftX = gsLeftX, gsLeftY = gsLeftY,
+                gsRightX = gsRightX, gsRightY = gsRightY,
+                gsLT = gsLT, gsRT = gsRT
             )
         }
 
@@ -193,7 +213,11 @@ private fun PortraitLayout(
     onLeftTrigger: (Float) -> Unit,
     onRightTrigger: (Float) -> Unit,
     triggerButtonMode: Boolean,
-    debugLogVisible: Boolean
+    debugLogVisible: Boolean,
+    gsButtons: Int,
+    gsLeftX: Float, gsLeftY: Float,
+    gsRightX: Float, gsRightY: Float,
+    gsLT: Float, gsRT: Float
 ) {
     Column(
         modifier = Modifier
@@ -226,9 +250,10 @@ private fun PortraitLayout(
 
         Spacer(Modifier.height(10.dp))
 
-        TriggerRow(onLeftTrigger = onLeftTrigger, onRightTrigger = onRightTrigger, buttonMode = triggerButtonMode)
+        TriggerRow(onLeftTrigger = onLeftTrigger, onRightTrigger = onRightTrigger,
+            buttonMode = triggerButtonMode, hwLeftTrigger = gsLT, hwRightTrigger = gsRT)
         Spacer(Modifier.height(4.dp))
-        BumperRow(onPress = onPress, onRelease = onRelease)
+        BumperRow(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
 
         Spacer(Modifier.height(8.dp))
 
@@ -237,13 +262,13 @@ private fun PortraitLayout(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            DPad(onPress = onPress, onRelease = onRelease)
-            ActionButtons(onPress = onPress, onRelease = onRelease)
+            DPad(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
+            ActionButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
         }
 
         Spacer(Modifier.height(4.dp))
 
-        MenuButtons(onPress = onPress, onRelease = onRelease)
+        MenuButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
 
         Spacer(Modifier.height(8.dp))
 
@@ -255,18 +280,20 @@ private fun PortraitLayout(
             VirtualJoystick(
                 onAxisChanged = { x, y -> viewModel.setLeftAxis(x, y) },
                 size = 130.dp,
-                label = stringResource(R.string.label_left_stick)
+                label = stringResource(R.string.label_left_stick),
+                hwX = gsLeftX, hwY = gsLeftY
             )
             VirtualJoystick(
                 onAxisChanged = { x, y -> viewModel.setRightAxis(x, y) },
                 size = 130.dp,
                 label = stringResource(R.string.label_right_stick),
-                thumbColor = Color(0xFFFF9800)
+                thumbColor = Color(0xFFFF9800),
+                hwX = gsRightX, hwY = gsRightY
             )
         }
 
         Spacer(Modifier.height(2.dp))
-        StickClickRow(onPress = onPress, onRelease = onRelease)
+        StickClickRow(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
 
         Spacer(Modifier.height(8.dp))
 
@@ -314,7 +341,11 @@ private fun LandscapeLayout(
     onLeftTrigger: (Float) -> Unit,
     onRightTrigger: (Float) -> Unit,
     triggerButtonMode: Boolean,
-    debugLogVisible: Boolean
+    debugLogVisible: Boolean,
+    gsButtons: Int,
+    gsLeftX: Float, gsLeftY: Float,
+    gsRightX: Float, gsRightY: Float,
+    gsLT: Float, gsRT: Float
 ) {
     Column(
         modifier = Modifier
@@ -366,14 +397,18 @@ private fun LandscapeLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                GamepadTrigger("LT", onValueChanged = onLeftTrigger, buttonMode = triggerButtonMode, width = 78.dp, height = 40.dp)
-                ControlButton("LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease, width = 78.dp, height = 32.dp, fontSize = 12)
+                GamepadTrigger("LT", onValueChanged = onLeftTrigger, buttonMode = triggerButtonMode,
+                    hwValue = gsLT, width = 78.dp, height = 40.dp)
+                ControlButton("LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease,
+                    hwPressed = (gsButtons and GamepadButtons.LB) != 0, width = 78.dp, height = 32.dp, fontSize = 12)
                 VirtualJoystick(
                     onAxisChanged = { x, y -> viewModel.setLeftAxis(x, y) },
                     size = 100.dp,
-                    label = stringResource(R.string.label_left_stick)
+                    label = stringResource(R.string.label_left_stick),
+                    hwX = gsLeftX, hwY = gsLeftY
                 )
-                ControlButton("L3", GamepadButtons.L3, Color(0xFF546E7A), onPress, onRelease, width = 50.dp, height = 26.dp, fontSize = 10)
+                ControlButton("L3", GamepadButtons.L3, Color(0xFF546E7A), onPress, onRelease,
+                    hwPressed = (gsButtons and GamepadButtons.L3) != 0, width = 50.dp, height = 26.dp, fontSize = 10)
             }
 
             // Center: DPad + Menu + ABXY
@@ -387,11 +422,13 @@ private fun LandscapeLayout(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    DPad(onPress = onPress, onRelease = onRelease, btnWidth = 42.dp, btnHeight = 36.dp, offset = 38.dp)
+                    DPad(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons,
+                        btnWidth = 42.dp, btnHeight = 36.dp, offset = 38.dp)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        MenuButtons(onPress = onPress, onRelease = onRelease)
+                        MenuButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
                     }
-                    ActionButtons(onPress = onPress, onRelease = onRelease, buttonSize = 46.dp, spacing = 32.dp)
+                    ActionButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons,
+                        buttonSize = 46.dp, spacing = 32.dp)
                 }
             }
 
@@ -401,15 +438,19 @@ private fun LandscapeLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                GamepadTrigger("RT", onValueChanged = onRightTrigger, buttonMode = triggerButtonMode, width = 78.dp, height = 40.dp)
-                ControlButton("RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease, width = 78.dp, height = 32.dp, fontSize = 12)
+                GamepadTrigger("RT", onValueChanged = onRightTrigger, buttonMode = triggerButtonMode,
+                    hwValue = gsRT, width = 78.dp, height = 40.dp)
+                ControlButton("RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease,
+                    hwPressed = (gsButtons and GamepadButtons.RB) != 0, width = 78.dp, height = 32.dp, fontSize = 12)
                 VirtualJoystick(
                     onAxisChanged = { x, y -> viewModel.setRightAxis(x, y) },
                     size = 100.dp,
                     label = stringResource(R.string.label_right_stick),
-                    thumbColor = Color(0xFFFF9800)
+                    thumbColor = Color(0xFFFF9800),
+                    hwX = gsRightX, hwY = gsRightY
                 )
-                ControlButton("R3", GamepadButtons.R3, Color(0xFF546E7A), onPress, onRelease, width = 50.dp, height = 26.dp, fontSize = 10)
+                ControlButton("R3", GamepadButtons.R3, Color(0xFF546E7A), onPress, onRelease,
+                    hwPressed = (gsButtons and GamepadButtons.R3) != 0, width = 50.dp, height = 26.dp, fontSize = 10)
             }
         }
 

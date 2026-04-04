@@ -3,6 +3,8 @@ package com.example.superiorcontroller.viewmodel
 import android.app.Application
 import android.bluetooth.BluetoothDevice
 import android.util.Log
+import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.superiorcontroller.bluetooth.BluetoothHidManager
@@ -12,6 +14,7 @@ import com.example.superiorcontroller.hid.GamepadReportBuilder
 import com.example.superiorcontroller.hid.GamepadState
 import com.example.superiorcontroller.hid.HidDescriptor
 import com.example.superiorcontroller.hid.TriggerDefaults
+import com.example.superiorcontroller.input.HardwareGamepadManager
 import com.example.superiorcontroller.settings.SettingsRepository
 import com.example.superiorcontroller.ui.components.ButtonHaptics
 import com.example.superiorcontroller.ui.components.ButtonSoundPlayer
@@ -61,10 +64,17 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _debugLogVisible = MutableStateFlow(true)
     val debugLogVisible: StateFlow<Boolean> = _debugLogVisible.asStateFlow()
 
+    private val _hwConnected = MutableStateFlow(false)
+    val hwConnected: StateFlow<Boolean> = _hwConnected.asStateFlow()
+
+    private val _hwDeviceName = MutableStateFlow<String?>(null)
+    val hwDeviceName: StateFlow<String?> = _hwDeviceName.asStateFlow()
+
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
     private val settingsRepo = SettingsRepository(application.applicationContext)
     private val hidManager = BluetoothHidManager(application.applicationContext)
+    private val hwManager = HardwareGamepadManager(application.applicationContext)
 
     private val managerListener = object : BluetoothHidManager.Listener {
         override fun onProxyReady() { _proxyReady.value = true }
@@ -76,8 +86,41 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         override fun onLog(message: String) { addLog(message) }
     }
 
+    private val hwListener = object : HardwareGamepadManager.Listener {
+        override fun onHwButtonDown(button: Int, name: String) {
+            pressButton(button, "[HW] ")
+        }
+        override fun onHwButtonUp(button: Int, name: String) {
+            releaseButton(button, "[HW] ")
+        }
+        override fun onHwLeftAxis(x: Float, y: Float) {
+            setLeftAxis(x, y)
+        }
+        override fun onHwRightAxis(x: Float, y: Float) {
+            setRightAxis(x, y)
+        }
+        override fun onHwLeftTrigger(value: Float) {
+            setLeftTrigger(value)
+        }
+        override fun onHwRightTrigger(value: Float) {
+            setRightTrigger(value)
+        }
+        override fun onHwDeviceConnected(name: String, vendorId: Int, productId: Int) {
+            _hwConnected.value = true
+            _hwDeviceName.value = name
+            addLog("GAMEPAD_CONNECTED: $name (VID:${"%04X".format(vendorId)} PID:${"%04X".format(productId)})")
+        }
+        override fun onHwDeviceDisconnected(name: String) {
+            _hwConnected.value = false
+            _hwDeviceName.value = null
+            addLog("GAMEPAD_DISCONNECTED: $name")
+        }
+    }
+
     init {
         hidManager.listener = managerListener
+        hwManager.listener = hwListener
+        hwManager.register()
         addLog("Mode: 11btn+2trig | report=${HidDescriptor.REPORT_SIZE}B | throttle=${BluetoothHidManager.MIN_INTERVAL_MS}ms")
 
         viewModelScope.launch {
@@ -124,9 +167,14 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     fun getBondedDevices(): List<BluetoothDevice> = hidManager.getBondedDevices()
     fun connectToDevice(device: BluetoothDevice) { hidManager.connectToHost(device) }
 
+    // ── Hardware gamepad event forwarding ─────────────────────────────
+
+    fun processHardwareKeyEvent(event: KeyEvent): Boolean = hwManager.processKeyEvent(event)
+    fun processHardwareMotionEvent(event: MotionEvent): Boolean = hwManager.processMotionEvent(event)
+
     // ── Button controls ─────────────────────────────────────────────────
 
-    fun pressButton(button: Int) {
+    fun pressButton(button: Int, tag: String = "") {
         val state = _gamepadState.value
 
         if (GamepadButtons.isDpad(button)) {
@@ -140,11 +188,11 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         val s = _gamepadState.value
         val name = buttonName(button)
         val report = GamepadReportBuilder.buildReport(s)
-        addLog("▶ PRESS $name mask=0x${"%04X".format(s.buttons)} ${GamepadReportBuilder.describeBytes(s)} hex=[${GamepadReportBuilder.toHexString(report)}]")
-        sendForced("PRESS $name")
+        addLog("${tag}▶ PRESS $name mask=0x${"%04X".format(s.buttons)} ${GamepadReportBuilder.describeBytes(s)} hex=[${GamepadReportBuilder.toHexString(report)}]")
+        sendForced("${tag}PRESS $name")
     }
 
-    fun releaseButton(button: Int) {
+    fun releaseButton(button: Int, tag: String = "") {
         val state = _gamepadState.value
 
         if (GamepadButtons.isDpad(button)) {
@@ -157,8 +205,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
         val s = _gamepadState.value
         val name = buttonName(button)
-        addLog("■ RELEASE $name mask=0x${"%04X".format(s.buttons)} hex=[${GamepadReportBuilder.toHexString(GamepadReportBuilder.buildReport(s))}]")
-        sendForced("RELEASE $name")
+        addLog("${tag}■ RELEASE $name mask=0x${"%04X".format(s.buttons)} hex=[${GamepadReportBuilder.toHexString(GamepadReportBuilder.buildReport(s))}]")
+        sendForced("${tag}RELEASE $name")
     }
 
     private fun buttonName(button: Int): String = when (button) {
@@ -226,16 +274,16 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     private fun sendForced(context: String) {
         if (!_isConnected.value) {
-            addLog("  ⚠ NOT CONNECTED ($context)")
+            addLog("  -- NOT CONNECTED ($context)")
             return
         }
         val report = GamepadReportBuilder.buildReport(_gamepadState.value)
         val sent = hidManager.sendReport(report, force = true)
         _reportsSent.value = hidManager.sendCount
         if (sent) {
-            addLog("  ✓ SENT_FORCED #${hidManager.sendCount} ($context) [${hidManager.statsString()}]")
+            addLog("  + SENT_FORCED #${hidManager.sendCount} ($context) [${hidManager.statsString()}]")
         } else {
-            addLog("  ✗ SEND_FAILED ($context) hex=[${GamepadReportBuilder.toHexString(report)}]")
+            addLog("  x SEND_FAILED ($context) hex=[${GamepadReportBuilder.toHexString(report)}]")
         }
     }
 
@@ -287,6 +335,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         super.onCleared()
+        hwManager.unregister()
         ButtonSoundPlayer.release()
         hidManager.cleanup()
     }

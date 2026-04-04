@@ -32,11 +32,14 @@ fun VirtualJoystick(
     modifier: Modifier = Modifier,
     size: Dp = 140.dp,
     label: String = "",
-    thumbColor: Color = Color(0xFF00E5FF)
+    thumbColor: Color = Color(0xFF00E5FF),
+    hwX: Float = 0f,
+    hwY: Float = 0f
 ) {
     var thumbOffset by remember { mutableStateOf(Offset.Zero) }
     var normalizedX by remember { mutableStateOf(0f) }
     var normalizedY by remember { mutableStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         if (label.isNotEmpty()) {
@@ -59,6 +62,7 @@ fun VirtualJoystick(
 
                     detectDragGestures(
                         onDragStart = { pos ->
+                            isDragging = true
                             val dx = pos.x - cx
                             val dy = pos.y - cy
                             val d = sqrt(dx * dx + dy * dy)
@@ -76,8 +80,8 @@ fun VirtualJoystick(
                             normalizedY = (thumbOffset.y / maxTravel).coerceIn(-1f, 1f)
                             onAxisChanged(normalizedX, normalizedY)
                         },
-                        onDragEnd = { thumbOffset = Offset.Zero; normalizedX = 0f; normalizedY = 0f; onAxisChanged(0f, 0f) },
-                        onDragCancel = { thumbOffset = Offset.Zero; normalizedX = 0f; normalizedY = 0f; onAxisChanged(0f, 0f) }
+                        onDragEnd = { isDragging = false; thumbOffset = Offset.Zero; normalizedX = 0f; normalizedY = 0f; onAxisChanged(0f, 0f) },
+                        onDragCancel = { isDragging = false; thumbOffset = Offset.Zero; normalizedX = 0f; normalizedY = 0f; onAxisChanged(0f, 0f) }
                     )
                 },
             contentAlignment = Alignment.Center
@@ -86,17 +90,26 @@ fun VirtualJoystick(
                 val center = Offset(this.size.width / 2f, this.size.height / 2f)
                 val outerR = this.size.width * OUTER_RADIUS_FRACTION
                 val innerR = this.size.width * INNER_RADIUS_FRACTION
+                val maxTravel = outerR - innerR
+
+                val displayOffset = if (isDragging) {
+                    thumbOffset
+                } else {
+                    Offset(hwX * maxTravel, hwY * maxTravel)
+                }
 
                 drawCircle(Color(0xFF37474F), outerR, center, style = Stroke(2.dp.toPx()))
                 drawCircle(Color(0xFF263238), outerR * 0.5f, center, style = Stroke(1.dp.toPx()))
                 drawLine(Color(0xFF263238), Offset(center.x, center.y - outerR), Offset(center.x, center.y + outerR), 1.dp.toPx())
                 drawLine(Color(0xFF263238), Offset(center.x - outerR, center.y), Offset(center.x + outerR, center.y), 1.dp.toPx())
-                drawCircle(thumbColor, innerR, center + thumbOffset, alpha = 0.9f)
+                drawCircle(thumbColor, innerR, center + displayOffset, alpha = 0.9f)
             }
         }
 
+        val displayX = if (isDragging) normalizedX else hwX
+        val displayY = if (isDragging) normalizedY else hwY
         Text(
-            text = "${"%.1f".format(normalizedX)}, ${"%.1f".format(normalizedY)}",
+            text = "${"%.1f".format(displayX)}, ${"%.1f".format(displayY)}",
             fontSize = 10.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         )

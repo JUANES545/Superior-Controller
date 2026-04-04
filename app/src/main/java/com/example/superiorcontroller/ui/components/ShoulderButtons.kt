@@ -63,46 +63,39 @@ fun TriggerRow(
     onLeftTrigger: (Float) -> Unit,
     onRightTrigger: (Float) -> Unit,
     modifier: Modifier = Modifier,
-    buttonMode: Boolean = false
+    buttonMode: Boolean = false,
+    hwLeftTrigger: Float = 0f,
+    hwRightTrigger: Float = 0f
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        GamepadTrigger("LT", onValueChanged = onLeftTrigger, buttonMode = buttonMode)
-        GamepadTrigger("RT", onValueChanged = onRightTrigger, buttonMode = buttonMode)
+        GamepadTrigger("LT", onValueChanged = onLeftTrigger, buttonMode = buttonMode, hwValue = hwLeftTrigger)
+        GamepadTrigger("RT", onValueChanged = onRightTrigger, buttonMode = buttonMode, hwValue = hwRightTrigger)
     }
 }
 
-/**
- * Delegates to [AnalogTrigger] or [TriggerButton] based on user preference.
- * Both modes send the same analog Float values — only the interaction differs.
- */
 @Composable
 fun GamepadTrigger(
     label: String,
     onValueChanged: (Float) -> Unit,
     buttonMode: Boolean,
     modifier: Modifier = Modifier,
+    hwValue: Float = 0f,
     width: Dp = 110.dp,
     height: Dp = 64.dp
 ) {
     if (buttonMode) {
-        TriggerButton(label, onValueChanged, modifier, width, height)
+        TriggerButton(label, onValueChanged, modifier, hwPressed = hwValue > 0.5f, width = width, height = height)
     } else {
-        AnalogTrigger(label, onValueChanged, modifier, width = width, height = height)
+        AnalogTrigger(label, onValueChanged, modifier, hwValue = hwValue, width = width, height = height)
     }
 }
 
-/**
- * Capsule-shaped analog trigger with gradient fill and spring-back.
- *
- * Touch position maps to pressure (top = 0 %, bottom = 100 %).
- * On release the HID value snaps to 0 immediately while the visual fill
- * animates back with spring physics for a satisfying tactile feel.
- */
 @Composable
 fun AnalogTrigger(
     label: String,
     onValueChanged: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    hwValue: Float = 0f,
     accentColor: Color = TRIGGER_COLOR,
     width: Dp = 110.dp,
     height: Dp = 64.dp
@@ -111,10 +104,11 @@ fun AnalogTrigger(
     val scope = rememberCoroutineScope()
     var fill by remember { mutableFloatStateOf(0f) }
     var animJob by remember { mutableStateOf<Job?>(null) }
+    var isDragging by remember { mutableStateOf(false) }
 
-    val clampedFill = fill.coerceIn(0f, 1f)
-    val pct = (clampedFill * 100).toInt()
-    val borderAlpha = 0.2f + 0.8f * clampedFill
+    val displayFill = if (isDragging) fill.coerceIn(0f, 1f) else hwValue.coerceIn(0f, 1f)
+    val pct = (displayFill * 100).toInt()
+    val borderAlpha = 0.2f + 0.8f * displayFill
     val gradientTop = remember(accentColor) { accentColor.copy(alpha = 0.4f) }
 
     Box(
@@ -125,6 +119,7 @@ fun AnalogTrigger(
             .background(TRIGGER_TRACK)
             .pointerInput(Unit) {
                 awaitEachGesture {
+                    isDragging = true
                     animJob?.cancel()
 
                     val down = awaitFirstDown(requireUnconsumed = false).also { it.consume() }
@@ -166,64 +161,50 @@ fun AnalogTrigger(
                                 }
                             }
                             fill = 0f
+                            isDragging = false
                         }
                     }
                 }
             },
         contentAlignment = Alignment.Center
     ) {
-        // Gradient fill rising from bottom
-        if (clampedFill > 0f) {
+        if (displayFill > 0f) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(clampedFill)
+                    .fillMaxHeight(displayFill)
                     .align(Alignment.BottomCenter)
                     .background(Brush.verticalGradient(listOf(gradientTop, accentColor)))
             )
         }
 
-        // Dynamic glow border — brighter as pressure increases
         Box(
             Modifier
                 .matchParentSize()
                 .border(1.5.dp, accentColor.copy(alpha = borderAlpha), CapsuleShape)
         )
 
-        // Label + live percentage
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = label,
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 14.sp
-            )
+            Text(text = label, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
             if (pct > 0) {
-                Text(
-                    text = "$pct%",
-                    color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Text(text = "$pct%", color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp, fontWeight = FontWeight.Medium)
             }
         }
     }
 }
 
-/**
- * Button-mode trigger: sends 1.0 on press, 0.0 on release.
- * Internally still an analog value — Windows sees Z/Rz go from 0 → 255 → 0.
- */
 @Composable
 fun TriggerButton(
     label: String,
     onValueChanged: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    hwPressed: Boolean = false,
     width: Dp = 110.dp,
     height: Dp = 64.dp
 ) {
     val context = LocalContext.current
     var pressed by remember { mutableStateOf(false) }
+    val isActive = pressed || hwPressed
 
     Surface(
         modifier = modifier
@@ -242,8 +223,8 @@ fun TriggerButton(
                 }
             },
         shape = RoundedCornerShape(12.dp),
-        color = if (pressed) TRIGGER_COLOR.copy(alpha = 0.6f) else TRIGGER_COLOR,
-        shadowElevation = if (pressed) 1.dp else 4.dp
+        color = if (isActive) TRIGGER_COLOR.copy(alpha = 0.6f) else TRIGGER_COLOR,
+        shadowElevation = if (isActive) 1.dp else 4.dp
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Text(text = label, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = Color.White)
@@ -257,11 +238,14 @@ fun TriggerButton(
 fun BumperRow(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hwButtons: Int = 0
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        ControlButton("LB", GamepadButtons.LB, BUMPER_COLOR, onPress, onRelease)
-        ControlButton("RB", GamepadButtons.RB, BUMPER_COLOR, onPress, onRelease)
+        ControlButton("LB", GamepadButtons.LB, BUMPER_COLOR, onPress, onRelease,
+            hwPressed = (hwButtons and GamepadButtons.LB) != 0)
+        ControlButton("RB", GamepadButtons.RB, BUMPER_COLOR, onPress, onRelease,
+            hwPressed = (hwButtons and GamepadButtons.RB) != 0)
     }
 }
 
@@ -269,16 +253,20 @@ fun BumperRow(
 fun MenuButtons(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hwButtons: Int = 0
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ControlButton("BACK", GamepadButtons.BACK, MENU_COLOR, onPress, onRelease, width = 72.dp)
-        HomeButton(onPress = onPress, onRelease = onRelease)
-        ControlButton("START", GamepadButtons.START, MENU_COLOR, onPress, onRelease, width = 72.dp)
+        ControlButton("BACK", GamepadButtons.BACK, MENU_COLOR, onPress, onRelease, width = 72.dp,
+            hwPressed = (hwButtons and GamepadButtons.BACK) != 0)
+        HomeButton(onPress = onPress, onRelease = onRelease,
+            hwPressed = (hwButtons and GamepadButtons.HOME) != 0)
+        ControlButton("START", GamepadButtons.START, MENU_COLOR, onPress, onRelease, width = 72.dp,
+            hwPressed = (hwButtons and GamepadButtons.START) != 0)
     }
 }
 
@@ -287,10 +275,12 @@ fun HomeButton(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    hwPressed: Boolean = false,
     size: Dp = 38.dp
 ) {
     val context = LocalContext.current
     var pressed by remember { mutableStateOf(false) }
+    val isActive = pressed || hwPressed
 
     Surface(
         modifier = modifier
@@ -308,8 +298,8 @@ fun HomeButton(
                 }
             },
         shape = CircleShape,
-        color = if (pressed) HOME_COLOR.copy(alpha = 0.6f) else HOME_COLOR,
-        shadowElevation = if (pressed) 1.dp else 4.dp
+        color = if (isActive) HOME_COLOR.copy(alpha = 0.6f) else HOME_COLOR,
+        shadowElevation = if (isActive) 1.dp else 4.dp
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Icon(
@@ -326,11 +316,14 @@ fun HomeButton(
 fun StickClickRow(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hwButtons: Int = 0
 ) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-        ControlButton("L3", GamepadButtons.L3, STICK_CLICK_COLOR, onPress, onRelease, width = 56.dp, height = 32.dp, fontSize = 11)
-        ControlButton("R3", GamepadButtons.R3, STICK_CLICK_COLOR, onPress, onRelease, width = 56.dp, height = 32.dp, fontSize = 11)
+        ControlButton("L3", GamepadButtons.L3, STICK_CLICK_COLOR, onPress, onRelease, width = 56.dp, height = 32.dp, fontSize = 11,
+            hwPressed = (hwButtons and GamepadButtons.L3) != 0)
+        ControlButton("R3", GamepadButtons.R3, STICK_CLICK_COLOR, onPress, onRelease, width = 56.dp, height = 32.dp, fontSize = 11,
+            hwPressed = (hwButtons and GamepadButtons.R3) != 0)
     }
 }
 
@@ -342,12 +335,14 @@ fun ControlButton(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    hwPressed: Boolean = false,
     width: Dp = 100.dp,
     height: Dp = 38.dp,
     fontSize: Int = 13
 ) {
     val context = LocalContext.current
     var pressed by remember { mutableStateOf(false) }
+    val isActive = pressed || hwPressed
 
     Surface(
         modifier = modifier
@@ -366,8 +361,8 @@ fun ControlButton(
                 }
             },
         shape = RoundedCornerShape(8.dp),
-        color = if (pressed) color.copy(alpha = 0.6f) else color,
-        shadowElevation = if (pressed) 1.dp else 4.dp
+        color = if (isActive) color.copy(alpha = 0.6f) else color,
+        shadowElevation = if (isActive) 1.dp else 4.dp
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Text(text = label, fontWeight = FontWeight.Bold, fontSize = fontSize.sp, color = Color.White)

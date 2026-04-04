@@ -31,6 +31,7 @@ fun ActionButtons(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    hwButtons: Int = 0,
     buttonSize: Dp = 52.dp,
     spacing: Dp = 36.dp
 ) {
@@ -40,16 +41,20 @@ fun ActionButtons(
     ) {
         GamepadFaceButton("Y", Color(0xFFFFEB3B), Color.Black, buttonSize,
             { onPress(GamepadButtons.Y) }, { onRelease(GamepadButtons.Y) },
-            Modifier.offset(y = -spacing))
+            Modifier.offset(y = -spacing),
+            hwPressed = (hwButtons and GamepadButtons.Y) != 0)
         GamepadFaceButton("A", Color(0xFF4CAF50), Color.White, buttonSize,
             { onPress(GamepadButtons.A) }, { onRelease(GamepadButtons.A) },
-            Modifier.offset(y = spacing))
+            Modifier.offset(y = spacing),
+            hwPressed = (hwButtons and GamepadButtons.A) != 0)
         GamepadFaceButton("X", Color(0xFF2196F3), Color.White, buttonSize,
             { onPress(GamepadButtons.X) }, { onRelease(GamepadButtons.X) },
-            Modifier.offset(x = -spacing))
+            Modifier.offset(x = -spacing),
+            hwPressed = (hwButtons and GamepadButtons.X) != 0)
         GamepadFaceButton("B", Color(0xFFF44336), Color.White, buttonSize,
             { onPress(GamepadButtons.B) }, { onRelease(GamepadButtons.B) },
-            Modifier.offset(x = spacing))
+            Modifier.offset(x = spacing),
+            hwPressed = (hwButtons and GamepadButtons.B) != 0)
     }
 }
 
@@ -61,10 +66,12 @@ fun GamepadFaceButton(
     size: Dp = 52.dp,
     onPress: () -> Unit,
     onRelease: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hwPressed: Boolean = false
 ) {
     val context = LocalContext.current
     var pressed by remember { mutableStateOf(false) }
+    val isActive = pressed || hwPressed
 
     Surface(
         modifier = modifier
@@ -82,8 +89,8 @@ fun GamepadFaceButton(
                 }
             },
         shape = CircleShape,
-        color = if (pressed) color.copy(alpha = 0.6f) else color,
-        shadowElevation = if (pressed) 1.dp else 6.dp,
+        color = if (isActive) color.copy(alpha = 0.6f) else color,
+        shadowElevation = if (isActive) 1.dp else 6.dp,
         contentColor = textColor
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {

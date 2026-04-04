@@ -4,11 +4,14 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -19,12 +22,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.superiorcontroller.ui.GamepadScreen
 import com.example.superiorcontroller.ui.theme.SuperiorControllerTheme
 import com.example.superiorcontroller.viewmodel.GamepadViewModel
 
 class MainActivity : ComponentActivity() {
+
+    private val gamepadViewModel: GamepadViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,8 +36,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SuperiorControllerTheme {
-                val gamepadViewModel: GamepadViewModel = viewModel()
-
                 var permissionsGranted by remember { mutableStateOf(hasBluetoothPermissions()) }
 
                 val permissionLauncher = rememberLauncherForActivityResult(
@@ -58,6 +60,25 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    // ── Hardware gamepad event capture ────────────────────────────────
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (event != null && gamepadViewModel.processHardwareKeyEvent(event)) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (event != null && gamepadViewModel.processHardwareKeyEvent(event)) return true
+        return super.onKeyUp(keyCode, event)
+    }
+
+    override fun onGenericMotionEvent(event: MotionEvent?): Boolean {
+        if (event != null && gamepadViewModel.processHardwareMotionEvent(event)) return true
+        return super.onGenericMotionEvent(event)
+    }
+
+    // ── Permissions ──────────────────────────────────────────────────
 
     private fun hasBluetoothPermissions(): Boolean =
         bluetoothPermissions().all {

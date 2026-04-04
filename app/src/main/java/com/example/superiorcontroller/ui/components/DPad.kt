@@ -33,6 +33,7 @@ fun DPad(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    hwButtons: Int = 0,
     btnWidth: Dp = 46.dp,
     btnHeight: Dp = 40.dp,
     offset: Dp = 42.dp
@@ -42,13 +43,17 @@ fun DPad(
         contentAlignment = Alignment.Center
     ) {
         DPadButton("▲", btnWidth, btnHeight, { onPress(GamepadButtons.DPAD_UP) },
-            { onRelease(GamepadButtons.DPAD_UP) }, Modifier.offset(y = -offset))
+            { onRelease(GamepadButtons.DPAD_UP) }, Modifier.offset(y = -offset),
+            hwPressed = (hwButtons and GamepadButtons.DPAD_UP) != 0)
         DPadButton("▼", btnWidth, btnHeight, { onPress(GamepadButtons.DPAD_DOWN) },
-            { onRelease(GamepadButtons.DPAD_DOWN) }, Modifier.offset(y = offset))
+            { onRelease(GamepadButtons.DPAD_DOWN) }, Modifier.offset(y = offset),
+            hwPressed = (hwButtons and GamepadButtons.DPAD_DOWN) != 0)
         DPadButton("◄", btnWidth, btnHeight, { onPress(GamepadButtons.DPAD_LEFT) },
-            { onRelease(GamepadButtons.DPAD_LEFT) }, Modifier.offset(x = -offset))
+            { onRelease(GamepadButtons.DPAD_LEFT) }, Modifier.offset(x = -offset),
+            hwPressed = (hwButtons and GamepadButtons.DPAD_LEFT) != 0)
         DPadButton("►", btnWidth, btnHeight, { onPress(GamepadButtons.DPAD_RIGHT) },
-            { onRelease(GamepadButtons.DPAD_RIGHT) }, Modifier.offset(x = offset))
+            { onRelease(GamepadButtons.DPAD_RIGHT) }, Modifier.offset(x = offset),
+            hwPressed = (hwButtons and GamepadButtons.DPAD_RIGHT) != 0)
     }
 }
 
@@ -59,10 +64,12 @@ private fun DPadButton(
     height: Dp,
     onPress: () -> Unit,
     onRelease: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hwPressed: Boolean = false
 ) {
     val context = LocalContext.current
     var pressed by remember { mutableStateOf(false) }
+    val isActive = pressed || hwPressed
 
     Surface(
         modifier = modifier
@@ -80,8 +87,8 @@ private fun DPadButton(
                 }
             },
         shape = RoundedCornerShape(8.dp),
-        color = if (pressed) DPAD_COLOR.copy(alpha = 0.6f) else DPAD_COLOR,
-        shadowElevation = if (pressed) 1.dp else 4.dp
+        color = if (isActive) DPAD_COLOR.copy(alpha = 0.6f) else DPAD_COLOR,
+        shadowElevation = if (isActive) 1.dp else 4.dp
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Text(text = label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
