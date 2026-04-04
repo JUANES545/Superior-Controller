@@ -2,16 +2,23 @@ package com.example.superiorcontroller.viewmodel
 
 import android.app.Application
 import android.bluetooth.BluetoothDevice
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.superiorcontroller.bluetooth.BluetoothHidManager
 import com.example.superiorcontroller.hid.AxisDefaults
 import com.example.superiorcontroller.hid.GamepadButtons
 import com.example.superiorcontroller.hid.GamepadReportBuilder
 import com.example.superiorcontroller.hid.GamepadState
 import com.example.superiorcontroller.hid.HidDescriptor
+import com.example.superiorcontroller.hid.TriggerDefaults
+import com.example.superiorcontroller.settings.SettingsRepository
+import com.example.superiorcontroller.ui.components.ButtonHaptics
+import com.example.superiorcontroller.ui.components.ButtonSoundPlayer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -42,8 +49,15 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _reportsSent = MutableStateFlow(0L)
     val reportsSent: StateFlow<Long> = _reportsSent.asStateFlow()
 
+    private val _hapticsEnabled = MutableStateFlow(true)
+    val hapticsEnabled: StateFlow<Boolean> = _hapticsEnabled.asStateFlow()
+
+    private val _soundEnabled = MutableStateFlow(true)
+    val soundEnabled: StateFlow<Boolean> = _soundEnabled.asStateFlow()
+
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
+    private val settingsRepo = SettingsRepository(application.applicationContext)
     private val hidManager = BluetoothHidManager(application.applicationContext)
 
     private val managerListener = object : BluetoothHidManager.Listener {
@@ -58,7 +72,22 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         hidManager.listener = managerListener
-        addLog("Mode: ${if (HidDescriptor.EXTENDED_BUTTONS) "12btn" else "8btn"} | report=${HidDescriptor.REPORT_SIZE}B | throttle=${BluetoothHidManager.MIN_INTERVAL_MS}ms")
+        addLog("Mode: 10btn+2trig | report=${HidDescriptor.REPORT_SIZE}B | throttle=${BluetoothHidManager.MIN_INTERVAL_MS}ms")
+
+        viewModelScope.launch {
+            settingsRepo.hapticsEnabled.collect { enabled ->
+                _hapticsEnabled.value = enabled
+                ButtonHaptics.enabled = enabled
+                addLog("Settings: haptics=${if (enabled) "ON" else "OFF"}")
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.soundEnabled.collect { enabled ->
+                _soundEnabled.value = enabled
+                ButtonSoundPlayer.enabled = enabled
+                addLog("Settings: sound=${if (enabled) "ON" else "OFF"}")
+            }
+        }
     }
 
     // ── Lifecycle ───────────────────────────────────────────────────────
@@ -120,11 +149,36 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         GamepadButtons.X -> "X"; GamepadButtons.Y -> "Y"
         GamepadButtons.LB -> "LB"; GamepadButtons.RB -> "RB"
         GamepadButtons.BACK -> "BACK"; GamepadButtons.START -> "START"
-        GamepadButtons.LT -> "LT"; GamepadButtons.RT -> "RT"
         GamepadButtons.L3 -> "L3"; GamepadButtons.R3 -> "R3"
         GamepadButtons.DPAD_UP -> "D↑"; GamepadButtons.DPAD_DOWN -> "D↓"
         GamepadButtons.DPAD_LEFT -> "D←"; GamepadButtons.DPAD_RIGHT -> "D→"
         else -> "0x${"%04X".format(button)}"
+    }
+
+    // ── Trigger controls (analog) ────────────────────────────────────────
+
+    fun setLeftTrigger(normalized: Float) {
+        val value = (normalized * TriggerDefaults.MAX).toInt()
+            .coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX)
+        val prev = _gamepadState.value.leftTrigger
+        _gamepadState.value = _gamepadState.value.withLeftTrigger(value)
+        if (value == TriggerDefaults.REST && prev != TriggerDefaults.REST) {
+            sendForced("RELEASE LT")
+        } else {
+            sendThrottled()
+        }
+    }
+
+    fun setRightTrigger(normalized: Float) {
+        val value = (normalized * TriggerDefaults.MAX).toInt()
+            .coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX)
+        val prev = _gamepadState.value.rightTrigger
+        _gamepadState.value = _gamepadState.value.withRightTrigger(value)
+        if (value == TriggerDefaults.REST && prev != TriggerDefaults.REST) {
+            sendForced("RELEASE RT")
+        } else {
+            sendThrottled()
+        }
     }
 
     // ── Axis controls ───────────────────────────────────────────────────
@@ -186,13 +240,28 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     private fun addLog(message: String) {
         val timestamp = timeFormat.format(Date())
-        _logMessages.value = (_logMessages.value + "[$timestamp] $message").takeLast(150)
+        val formatted = "[$timestamp] $message"
+        _logMessages.value = (_logMessages.value + formatted).takeLast(150)
+        Log.d(TAG, formatted)
+    }
+
+    companion object {
+        private const val TAG = "GamepadDebug"
     }
 
     fun clearLog() { _logMessages.value = emptyList() }
 
+    fun toggleHaptics(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setHapticsEnabled(enabled) }
+    }
+
+    fun toggleSound(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setSoundEnabled(enabled) }
+    }
+
     override fun onCleared() {
         super.onCleared()
+        ButtonSoundPlayer.release()
         hidManager.cleanup()
     }
 }

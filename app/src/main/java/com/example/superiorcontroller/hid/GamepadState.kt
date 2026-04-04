@@ -6,7 +6,9 @@ data class GamepadState(
     val leftX: Int = AxisDefaults.CENTER,
     val leftY: Int = AxisDefaults.CENTER,
     val rightX: Int = AxisDefaults.CENTER,
-    val rightY: Int = AxisDefaults.CENTER
+    val rightY: Int = AxisDefaults.CENTER,
+    val leftTrigger: Int = TriggerDefaults.REST,
+    val rightTrigger: Int = TriggerDefaults.REST
 ) {
     fun isButtonPressed(button: Int): Boolean =
         (buttons and (button and GamepadButtons.BUTTON_MASK)) != 0
@@ -34,6 +36,12 @@ data class GamepadState(
             rightX = x.coerceIn(AxisDefaults.MIN, AxisDefaults.MAX),
             rightY = y.coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         )
+
+    fun withLeftTrigger(value: Int): GamepadState =
+        copy(leftTrigger = value.coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX))
+
+    fun withRightTrigger(value: Int): GamepadState =
+        copy(rightTrigger = value.coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX))
 
     fun neutral(): GamepadState = GamepadState()
 

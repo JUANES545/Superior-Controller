@@ -18,9 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import android.view.HapticFeedbackConstants
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -64,7 +63,7 @@ fun GamepadFaceButton(
     onRelease: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val view = LocalView.current
+    val context = LocalContext.current
     var pressed by remember { mutableStateOf(false) }
 
     Surface(
@@ -74,7 +73,8 @@ fun GamepadFaceButton(
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false).also { it.consume() }
                     pressed = true
-                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    ButtonHaptics.performClick(context, label)
+                    ButtonSoundPlayer.playClick(label)
                     onPress()
                     waitForUpOrCancellation()?.consume()
                     pressed = false

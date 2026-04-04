@@ -3,26 +3,17 @@ package com.example.superiorcontroller.hid
 object GamepadReportBuilder {
 
     fun buildReport(state: GamepadState): ByteArray {
-        return if (HidDescriptor.EXTENDED_BUTTONS) {
-            byteArrayOf(
-                (state.buttons and 0xFF).toByte(),
-                ((state.buttons shr 8) and 0x0F).toByte(),
-                (state.hatSwitchValue() and 0x0F).toByte(),
-                state.leftX.toByte(),
-                state.leftY.toByte(),
-                state.rightX.toByte(),
-                state.rightY.toByte()
-            )
-        } else {
-            byteArrayOf(
-                (state.buttons and 0xFF).toByte(),
-                (state.hatSwitchValue() and 0x0F).toByte(),
-                state.leftX.toByte(),
-                state.leftY.toByte(),
-                state.rightX.toByte(),
-                state.rightY.toByte()
-            )
-        }
+        return byteArrayOf(
+            (state.buttons and 0xFF).toByte(),              // Byte 0: buttons [0..7]
+            ((state.buttons shr 8) and 0x03).toByte(),      // Byte 1: buttons [8..9] + 6-bit pad
+            (state.hatSwitchValue() and 0x0F).toByte(),     // Byte 2: hat switch
+            state.leftX.toByte(),                            // Byte 3: X
+            state.leftY.toByte(),                            // Byte 4: Y
+            state.rightX.toByte(),                           // Byte 5: Rx
+            state.rightY.toByte(),                           // Byte 6: Ry
+            state.leftTrigger.toByte(),                      // Byte 7: Z  (LT)
+            state.rightTrigger.toByte()                      // Byte 8: Rz (RT)
+        )
     }
 
     fun neutralReport(): ByteArray = buildReport(GamepadState())
@@ -35,24 +26,19 @@ object GamepadReportBuilder {
             Integer.toBinaryString(it.toInt() and 0xFF).padStart(8, '0')
         }
 
-    /**
-     * Byte-level decomposition for debug logging.
-     * Shows the button mask split into its component bytes.
-     */
     fun describeBytes(state: GamepadState): String {
         val mask = state.buttons
         val b0 = mask and 0xFF
-        val b1 = (mask shr 8) and 0x0F
+        val b1 = (mask shr 8) and 0x03
         val hat = state.hatSwitchValue()
         return buildString {
             append("b0=")
             append(Integer.toBinaryString(b0).padStart(8, '0'))
-            if (HidDescriptor.EXTENDED_BUTTONS) {
-                append(" b1=")
-                append(Integer.toBinaryString(b1).padStart(4, '0'))
-                append("0000")
-            }
+            append(" b1=")
+            append(Integer.toBinaryString(b1).padStart(2, '0'))
+            append("000000")
             append(" hat=$hat")
+            append(" lt=${state.leftTrigger} rt=${state.rightTrigger}")
         }
     }
 
@@ -67,8 +53,6 @@ object GamepadReportBuilder {
         if (state.isButtonPressed(GamepadButtons.RB)) pressed += "RB"
         if (state.isButtonPressed(GamepadButtons.BACK)) pressed += "BK"
         if (state.isButtonPressed(GamepadButtons.START)) pressed += "ST"
-        if (state.isButtonPressed(GamepadButtons.LT)) pressed += "LT"
-        if (state.isButtonPressed(GamepadButtons.RT)) pressed += "RT"
         if (state.isButtonPressed(GamepadButtons.L3)) pressed += "L3"
         if (state.isButtonPressed(GamepadButtons.R3)) pressed += "R3"
 
@@ -78,6 +62,6 @@ object GamepadReportBuilder {
             HatSwitch.LEFT -> "W"; HatSwitch.UP_LEFT -> "NW"; else -> "-"
         }
         val btns = pressed.ifEmpty { listOf("none") }.joinToString("+")
-        return "[${toHexString(report)}] btn=$btns hat=$hat"
+        return "[${toHexString(report)}] btn=$btns hat=$hat lt=${state.leftTrigger} rt=${state.rightTrigger}"
     }
 }

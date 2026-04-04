@@ -22,14 +22,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,11 +45,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.superiorcontroller.R
 import com.example.superiorcontroller.ui.components.ActionButtons
+import com.example.superiorcontroller.ui.components.AnalogTrigger
 import com.example.superiorcontroller.ui.components.BumperRow
 import com.example.superiorcontroller.ui.components.ControlButton
 import com.example.superiorcontroller.ui.components.DPad
 import com.example.superiorcontroller.ui.components.DebugLog
 import com.example.superiorcontroller.ui.components.MenuButtons
+import com.example.superiorcontroller.ui.components.SettingsSheet
 import com.example.superiorcontroller.ui.components.StatusPanel
 import com.example.superiorcontroller.ui.components.StickClickRow
 import com.example.superiorcontroller.ui.components.TriggerRow
@@ -77,8 +86,14 @@ fun GamepadScreen(
         )
     }
 
+    val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
+    val soundEnabled by viewModel.soundEnabled.collectAsState()
+    var showSettings by remember { mutableStateOf(false) }
+
     val onPress: (Int) -> Unit = { viewModel.pressButton(it) }
     val onRelease: (Int) -> Unit = { viewModel.releaseButton(it) }
+    val onLeftTrigger: (Float) -> Unit = { viewModel.setLeftTrigger(it) }
+    val onRightTrigger: (Float) -> Unit = { viewModel.setRightTrigger(it) }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isLandscape = maxWidth > maxHeight
@@ -97,7 +112,9 @@ fun GamepadScreen(
                 reportsSent = reportsSent,
                 logMessages = logMessages,
                 onPress = onPress,
-                onRelease = onRelease
+                onRelease = onRelease,
+                onLeftTrigger = onLeftTrigger,
+                onRightTrigger = onRightTrigger
             )
         } else {
             PortraitLayout(
@@ -113,9 +130,35 @@ fun GamepadScreen(
                 reportsSent = reportsSent,
                 logMessages = logMessages,
                 onPress = onPress,
-                onRelease = onRelease
+                onRelease = onRelease,
+                onLeftTrigger = onLeftTrigger,
+                onRightTrigger = onRightTrigger
             )
         }
+
+        SmallFloatingActionButton(
+            onClick = { showSettings = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        ) {
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = stringResource(R.string.settings_title)
+            )
+        }
+    }
+
+    if (showSettings) {
+        SettingsSheet(
+            hapticsEnabled = hapticsEnabled,
+            soundEnabled = soundEnabled,
+            onToggleHaptics = { viewModel.toggleHaptics(it) },
+            onToggleSound = { viewModel.toggleSound(it) },
+            onDismiss = { showSettings = false }
+        )
     }
 }
 
@@ -135,7 +178,9 @@ private fun PortraitLayout(
     reportsSent: Long,
     logMessages: List<String>,
     onPress: (Int) -> Unit,
-    onRelease: (Int) -> Unit
+    onRelease: (Int) -> Unit,
+    onLeftTrigger: (Float) -> Unit,
+    onRightTrigger: (Float) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -168,7 +213,7 @@ private fun PortraitLayout(
 
         Spacer(Modifier.height(10.dp))
 
-        TriggerRow(onPress = onPress, onRelease = onRelease)
+        TriggerRow(onLeftTrigger = onLeftTrigger, onRightTrigger = onRightTrigger)
         Spacer(Modifier.height(4.dp))
         BumperRow(onPress = onPress, onRelease = onRelease)
 
@@ -249,7 +294,9 @@ private fun LandscapeLayout(
     reportsSent: Long,
     logMessages: List<String>,
     onPress: (Int) -> Unit,
-    onRelease: (Int) -> Unit
+    onRelease: (Int) -> Unit,
+    onLeftTrigger: (Float) -> Unit,
+    onRightTrigger: (Float) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -299,7 +346,7 @@ private fun LandscapeLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                ControlButton("LT", GamepadButtons.LT, Color(0xFFE65100), onPress, onRelease, width = 80.dp, height = 34.dp, fontSize = 12)
+                AnalogTrigger("LT", onValueChanged = onLeftTrigger, width = 80.dp, height = 44.dp)
                 Spacer(Modifier.height(2.dp))
                 ControlButton("LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease, width = 80.dp, height = 34.dp, fontSize = 12)
                 Spacer(Modifier.height(4.dp))
@@ -336,7 +383,7 @@ private fun LandscapeLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                ControlButton("RT", GamepadButtons.RT, Color(0xFFE65100), onPress, onRelease, width = 80.dp, height = 34.dp, fontSize = 12)
+                AnalogTrigger("RT", onValueChanged = onRightTrigger, width = 80.dp, height = 44.dp)
                 Spacer(Modifier.height(2.dp))
                 ControlButton("RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease, width = 80.dp, height = 34.dp, fontSize = 12)
                 Spacer(Modifier.height(4.dp))

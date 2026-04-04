@@ -27,4 +27,11 @@
 
     <!-- Debug -->
     <string name="debug_log_title">DEBUG LOG</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_haptics_title">Button vibration</string>
+    <string name="settings_haptics_desc">Vibrate on button press</string>
+    <string name="settings_sound_title">Button sound</string>
+    <string name="settings_sound_desc">Play click sound on button press</string>
 </resources>
