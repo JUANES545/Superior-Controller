@@ -45,20 +45,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.superiorcontroller.R
 import com.example.superiorcontroller.hid.AxisDefaults
+import com.example.superiorcontroller.hid.GamepadButtons
 import com.example.superiorcontroller.hid.TriggerDefaults
+import com.example.superiorcontroller.recording.PlaybackStatus
 import com.example.superiorcontroller.ui.components.ActionButtons
 import com.example.superiorcontroller.ui.components.BumperRow
 import com.example.superiorcontroller.ui.components.ControlButton
-import com.example.superiorcontroller.ui.components.GamepadTrigger
 import com.example.superiorcontroller.ui.components.DPad
 import com.example.superiorcontroller.ui.components.DebugLog
+import com.example.superiorcontroller.ui.components.GamepadTrigger
 import com.example.superiorcontroller.ui.components.MenuButtons
+import com.example.superiorcontroller.ui.components.PlaybackBar
+import com.example.superiorcontroller.ui.components.RecordControls
+import com.example.superiorcontroller.ui.components.RecordingsSheet
 import com.example.superiorcontroller.ui.components.SettingsSheet
 import com.example.superiorcontroller.ui.components.StatusPanel
 import com.example.superiorcontroller.ui.components.StickClickRow
 import com.example.superiorcontroller.ui.components.TriggerRow
 import com.example.superiorcontroller.ui.components.VirtualJoystick
-import com.example.superiorcontroller.hid.GamepadButtons
 import com.example.superiorcontroller.viewmodel.GamepadViewModel
 
 @Composable
@@ -93,7 +97,9 @@ fun GamepadScreen(
     val triggerMode by viewModel.triggerMode.collectAsState()
     val triggerButtonMode = triggerMode == "button"
     val debugLogVisible by viewModel.debugLogVisible.collectAsState()
+
     var showSettings by remember { mutableStateOf(false) }
+    var showRecordings by remember { mutableStateOf(false) }
 
     val onPress: (Int) -> Unit = { viewModel.pressButton(it) }
     val onRelease: (Int) -> Unit = { viewModel.releaseButton(it) }
@@ -109,6 +115,12 @@ fun GamepadScreen(
     val gsRightY = (gs.rightY - AxisDefaults.CENTER.toFloat()) / AxisDefaults.CENTER
     val gsLT = gs.leftTrigger.toFloat() / TriggerDefaults.MAX
     val gsRT = gs.rightTrigger.toFloat() / TriggerDefaults.MAX
+
+    // Recording / Playback state
+    val isRecording by viewModel.isRecording.collectAsState()
+    val recordingElapsedMs by viewModel.recordingElapsedMs.collectAsState()
+    val recordings by viewModel.recordings.collectAsState()
+    val playbackProgress by viewModel.playbackProgress.collectAsState()
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isLandscape = maxWidth > maxHeight
@@ -163,6 +175,32 @@ fun GamepadScreen(
             )
         }
 
+        // Playback bar overlay (bottom center, above FABs)
+        if (playbackProgress.status != PlaybackStatus.IDLE) {
+            PlaybackBar(
+                progress = playbackProgress,
+                onPause = { viewModel.pausePlayback() },
+                onResume = { viewModel.resumePlayback() },
+                onStop = { viewModel.stopPlayback() },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 72.dp)
+            )
+        }
+
+        // Record controls (bottom-start)
+        RecordControls(
+            isRecording = isRecording,
+            elapsedMs = recordingElapsedMs,
+            hasRecordings = recordings.isNotEmpty(),
+            onToggleRecord = { if (isRecording) viewModel.stopRecording() else viewModel.startRecording() },
+            onOpenRecordings = { showRecordings = true },
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(16.dp)
+        )
+
+        // Settings FAB (bottom-end)
         SmallFloatingActionButton(
             onClick = { showSettings = true },
             modifier = Modifier
@@ -178,6 +216,7 @@ fun GamepadScreen(
         }
     }
 
+    // Settings sheet
     if (showSettings) {
         SettingsSheet(
             hapticsEnabled = hapticsEnabled,
@@ -189,6 +228,21 @@ fun GamepadScreen(
             onTriggerModeChange = { viewModel.setTriggerMode(it) },
             onToggleDebugLog = { viewModel.toggleDebugLog(it) },
             onDismiss = { showSettings = false }
+        )
+    }
+
+    // Recordings sheet
+    if (showRecordings) {
+        RecordingsSheet(
+            recordings = recordings,
+            playbackProgress = playbackProgress,
+            onPlay = { viewModel.playRecording(it) },
+            onPause = { viewModel.pausePlayback() },
+            onResume = { viewModel.resumePlayback() },
+            onStop = { viewModel.stopPlayback() },
+            onDelete = { viewModel.deleteRecording(it) },
+            onRename = { id, name -> viewModel.renameRecording(id, name) },
+            onDismiss = { showRecordings = false }
         )
     }
 }
@@ -317,7 +371,7 @@ private fun PortraitLayout(
             DebugLog(messages = logMessages)
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(80.dp))
     }
 }
 
@@ -352,7 +406,6 @@ private fun LandscapeLayout(
             .fillMaxSize()
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
-        // ── Top bar ─────────────────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -384,14 +437,12 @@ private fun LandscapeLayout(
 
         Spacer(Modifier.height(2.dp))
 
-        // ── Main controls ───────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left column: LT, LB, Left stick, L3
             Column(
                 modifier = Modifier.weight(0.22f),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -411,7 +462,6 @@ private fun LandscapeLayout(
                     hwPressed = (gsButtons and GamepadButtons.L3) != 0, width = 50.dp, height = 26.dp, fontSize = 10)
             }
 
-            // Center: DPad + Menu + ABXY
             Column(
                 modifier = Modifier.weight(0.56f),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -432,7 +482,6 @@ private fun LandscapeLayout(
                 }
             }
 
-            // Right column: RT, RB, Right stick, R3
             Column(
                 modifier = Modifier.weight(0.22f),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -454,7 +503,6 @@ private fun LandscapeLayout(
             }
         }
 
-        // ── Bottom centered debug console ────────────────────────
         if (debugLogVisible) {
             Box(
                 modifier = Modifier.fillMaxWidth(),

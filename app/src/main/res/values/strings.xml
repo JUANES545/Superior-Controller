@@ -41,4 +41,13 @@
     <string name="settings_trigger_button">Button</string>
     <string name="settings_debug_log_title">Debug log</string>
     <string name="settings_debug_log_desc">Show the debug console on screen</string>
+
+    <!-- Recording / Playback -->
+    <string name="recordings_title">Recordings</string>
+    <string name="recordings_empty">No recordings yet</string>
+    <string name="recording_delete">Delete</string>
+    <string name="recording_delete_confirm">Delete this recording?</string>
+    <string name="recording_rename">Rename</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_ok">OK</string>
 </resources>
