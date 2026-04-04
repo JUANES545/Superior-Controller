@@ -34,32 +34,24 @@ class MainActivity : ComponentActivity() {
             SuperiorControllerTheme {
                 val gamepadViewModel: GamepadViewModel = viewModel()
 
-                var permissionsGranted by remember {
-                    mutableStateOf(hasBluetoothPermissions())
-                }
+                var permissionsGranted by remember { mutableStateOf(hasBluetoothPermissions()) }
 
                 val permissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestMultiplePermissions()
                 ) { results ->
                     permissionsGranted = results.values.all { it }
-                    if (permissionsGranted) {
-                        gamepadViewModel.initializeBluetooth()
-                    }
+                    if (permissionsGranted) gamepadViewModel.initializeBluetooth()
                 }
 
                 LaunchedEffect(permissionsGranted) {
-                    if (permissionsGranted) {
-                        gamepadViewModel.initializeBluetooth()
-                    }
+                    if (permissionsGranted) gamepadViewModel.initializeBluetooth()
                 }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     GamepadScreen(
                         viewModel = gamepadViewModel,
                         permissionsGranted = permissionsGranted,
-                        onRequestPermissions = {
-                            permissionLauncher.launch(bluetoothPermissions())
-                        },
+                        onRequestPermissions = { permissionLauncher.launch(bluetoothPermissions()) },
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -67,15 +59,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun hasBluetoothPermissions(): Boolean {
-        return bluetoothPermissions().all {
+    private fun hasBluetoothPermissions(): Boolean =
+        bluetoothPermissions().all {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
-    }
 
     companion object {
-        fun bluetoothPermissions(): Array<String> {
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        fun bluetoothPermissions(): Array<String> =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 arrayOf(
                     Manifest.permission.BLUETOOTH_CONNECT,
                     Manifest.permission.BLUETOOTH_ADVERTISE,
@@ -87,6 +78,5 @@ class MainActivity : ComponentActivity() {
                     Manifest.permission.BLUETOOTH_ADMIN
                 )
             }
-        }
     }
 }

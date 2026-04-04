@@ -15,27 +15,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.superiorcontroller.R
 
 @Composable
 fun DebugLog(
     messages: List<String>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    maxHeight: Dp = 160.dp,
+    minHeight: Dp = 60.dp
 ) {
     val listState = rememberLazyListState()
 
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
-        }
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "DEBUG LOG",
+            text = stringResource(R.string.debug_log_title),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -46,26 +49,24 @@ fun DebugLog(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 80.dp, max = 160.dp)
-                .background(
-                    color = Color(0xFF1A1A1A),
-                    shape = RoundedCornerShape(8.dp)
-                )
+                .heightIn(min = minHeight, max = maxHeight)
+                .background(Color(0xFF0D1117), RoundedCornerShape(8.dp))
                 .padding(8.dp)
         ) {
             items(messages) { message ->
                 val color = when {
                     "ERROR" in message -> Color(0xFFF44336)
                     "connected" in message.lowercase() -> Color(0xFF4CAF50)
-                    "registered" in message.lowercase() -> Color(0xFF2196F3)
+                    "registered" in message.lowercase() -> Color(0xFF42A5F5)
+                    "PRESS" in message -> Color(0xFF00E5FF)
                     else -> Color(0xFFBDBDBD)
                 }
                 Text(
                     text = message,
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
                     color = color,
-                    lineHeight = 14.sp,
+                    lineHeight = 13.sp,
                     modifier = Modifier.padding(vertical = 1.dp)
                 )
             }

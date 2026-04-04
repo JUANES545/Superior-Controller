@@ -1,3 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Superior Controller</string>
+
+    <!-- Status panel -->
+    <string name="status_title">STATUS</string>
+    <string name="status_bluetooth">Bluetooth</string>
+    <string name="status_hid_reg">HID Reg.</string>
+    <string name="status_host">Host</string>
+    <string name="status_connected">Connected: %1$s</string>
+    <string name="status_reports_sent">Reports: %1$d</string>
+
+    <!-- Connection buttons -->
+    <string name="btn_grant_permissions">Grant Bluetooth Permissions</string>
+    <string name="btn_initialize_bt">Init BT</string>
+    <string name="btn_register_hid">Register HID</string>
+    <string name="btn_discoverable">Discoverable</string>
+    <string name="btn_unregister">Unregister</string>
+
+    <!-- Gamepad controls -->
+    <string name="btn_send_neutral">Neutral</string>
+    <string name="btn_clear_log">Clear Log</string>
+    <string name="label_back">BACK</string>
+    <string name="label_start">START</string>
+    <string name="label_left_stick">L</string>
+    <string name="label_right_stick">R</string>
+
+    <!-- Debug -->
+    <string name="debug_log_title">DEBUG LOG</string>
 </resources>

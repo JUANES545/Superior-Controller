@@ -1,106 +1,92 @@
 package com.example.superiorcontroller.ui.components
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.superiorcontroller.hid.GamepadButtons
-
-private val BUTTON_SIZE = 56.dp
-private val DIAMOND_OFFSET = 38.dp
 
 @Composable
 fun ActionButtons(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    buttonSize: Dp = 52.dp,
+    spacing: Dp = 36.dp
 ) {
     Box(
-        modifier = modifier.size(BUTTON_SIZE * 2 + DIAMOND_OFFSET),
+        modifier = modifier.size(buttonSize * 2 + spacing),
         contentAlignment = Alignment.Center
     ) {
-        // Y - top
-        GamepadButton(
-            label = "Y",
-            color = Color(0xFFFFEB3B),
-            textColor = Color.Black,
-            onPress = { onPress(GamepadButtons.Y) },
-            onRelease = { onRelease(GamepadButtons.Y) },
-            modifier = Modifier.offset(y = -DIAMOND_OFFSET)
-        )
-        // A - bottom
-        GamepadButton(
-            label = "A",
-            color = Color(0xFF4CAF50),
-            textColor = Color.White,
-            onPress = { onPress(GamepadButtons.A) },
-            onRelease = { onRelease(GamepadButtons.A) },
-            modifier = Modifier.offset(y = DIAMOND_OFFSET)
-        )
-        // X - left
-        GamepadButton(
-            label = "X",
-            color = Color(0xFF2196F3),
-            textColor = Color.White,
-            onPress = { onPress(GamepadButtons.X) },
-            onRelease = { onRelease(GamepadButtons.X) },
-            modifier = Modifier.offset(x = -DIAMOND_OFFSET)
-        )
-        // B - right
-        GamepadButton(
-            label = "B",
-            color = Color(0xFFF44336),
-            textColor = Color.White,
-            onPress = { onPress(GamepadButtons.B) },
-            onRelease = { onRelease(GamepadButtons.B) },
-            modifier = Modifier.offset(x = DIAMOND_OFFSET)
-        )
+        GamepadFaceButton("Y", Color(0xFFFFEB3B), Color.Black, buttonSize,
+            { onPress(GamepadButtons.Y) }, { onRelease(GamepadButtons.Y) },
+            Modifier.offset(y = -spacing))
+        GamepadFaceButton("A", Color(0xFF4CAF50), Color.White, buttonSize,
+            { onPress(GamepadButtons.A) }, { onRelease(GamepadButtons.A) },
+            Modifier.offset(y = spacing))
+        GamepadFaceButton("X", Color(0xFF2196F3), Color.White, buttonSize,
+            { onPress(GamepadButtons.X) }, { onRelease(GamepadButtons.X) },
+            Modifier.offset(x = -spacing))
+        GamepadFaceButton("B", Color(0xFFF44336), Color.White, buttonSize,
+            { onPress(GamepadButtons.B) }, { onRelease(GamepadButtons.B) },
+            Modifier.offset(x = spacing))
     }
 }
 
 @Composable
-fun GamepadButton(
+fun GamepadFaceButton(
     label: String,
     color: Color,
     textColor: Color,
+    size: Dp = 52.dp,
     onPress: () -> Unit,
     onRelease: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Button(
-        onClick = { /* handled by pointer input */ },
+    val haptic = LocalHapticFeedback.current
+    var pressed by remember { mutableStateOf(false) }
+
+    Surface(
         modifier = modifier
-            .size(BUTTON_SIZE)
+            .size(size)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
+                        pressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onPress()
                         tryAwaitRelease()
+                        pressed = false
                         onRelease()
                     }
                 )
             },
         shape = CircleShape,
-        colors = ButtonDefaults.buttonColors(containerColor = color),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+        color = if (pressed) color.copy(alpha = 0.6f) else color,
+        shadowElevation = if (pressed) 1.dp else 6.dp,
+        contentColor = textColor
     ) {
-        Text(
-            text = label,
-            color = textColor,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
-        )
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Text(text = label, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        }
     }
 }

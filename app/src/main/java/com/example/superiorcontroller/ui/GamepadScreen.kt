@@ -5,7 +5,11 @@ import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +17,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -26,17 +33,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.superiorcontroller.R
 import com.example.superiorcontroller.ui.components.ActionButtons
+import com.example.superiorcontroller.ui.components.BumperRow
+import com.example.superiorcontroller.ui.components.ControlButton
 import com.example.superiorcontroller.ui.components.DPad
 import com.example.superiorcontroller.ui.components.DebugLog
 import com.example.superiorcontroller.ui.components.MenuButtons
-import com.example.superiorcontroller.ui.components.ShoulderButtons
 import com.example.superiorcontroller.ui.components.StatusPanel
+import com.example.superiorcontroller.ui.components.StickClickRow
+import com.example.superiorcontroller.ui.components.TriggerRow
 import com.example.superiorcontroller.ui.components.VirtualJoystick
+import com.example.superiorcontroller.hid.GamepadButtons
 import com.example.superiorcontroller.viewmodel.GamepadViewModel
 
 @Composable
@@ -54,33 +65,85 @@ fun GamepadScreen(
     val reportsSent by viewModel.reportsSent.collectAsState()
     val logMessages by viewModel.logMessages.collectAsState()
 
-    val context = LocalContext.current
     val discoverableLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode != Activity.RESULT_CANCELED) {
-            // Discoverable enabled
-        }
+    ) { }
+
+    val onMakeDiscoverable: () -> Unit = {
+        discoverableLauncher.launch(
+            Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+            }
+        )
     }
 
+    val onPress: (Int) -> Unit = { viewModel.pressButton(it) }
+    val onRelease: (Int) -> Unit = { viewModel.releaseButton(it) }
+
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val isLandscape = maxWidth > maxHeight
+
+        if (isLandscape) {
+            LandscapeLayout(
+                viewModel = viewModel,
+                permissionsGranted = permissionsGranted,
+                onRequestPermissions = onRequestPermissions,
+                onMakeDiscoverable = onMakeDiscoverable,
+                bluetoothAvailable = bluetoothAvailable,
+                proxyReady = proxyReady,
+                isRegistered = isRegistered,
+                isConnected = isConnected,
+                connectedDevice = connectedDevice,
+                reportsSent = reportsSent,
+                logMessages = logMessages,
+                onPress = onPress,
+                onRelease = onRelease
+            )
+        } else {
+            PortraitLayout(
+                viewModel = viewModel,
+                permissionsGranted = permissionsGranted,
+                onRequestPermissions = onRequestPermissions,
+                onMakeDiscoverable = onMakeDiscoverable,
+                bluetoothAvailable = bluetoothAvailable,
+                proxyReady = proxyReady,
+                isRegistered = isRegistered,
+                isConnected = isConnected,
+                connectedDevice = connectedDevice,
+                reportsSent = reportsSent,
+                logMessages = logMessages,
+                onPress = onPress,
+                onRelease = onRelease
+            )
+        }
+    }
+}
+
+// ── Portrait ────────────────────────────────────────────────────────────────
+
+@Composable
+private fun PortraitLayout(
+    viewModel: GamepadViewModel,
+    permissionsGranted: Boolean,
+    onRequestPermissions: () -> Unit,
+    onMakeDiscoverable: () -> Unit,
+    bluetoothAvailable: Boolean,
+    proxyReady: Boolean,
+    isRegistered: Boolean,
+    isConnected: Boolean,
+    connectedDevice: String?,
+    reportsSent: Long,
+    logMessages: List<String>,
+    onPress: (Int) -> Unit,
+    onRelease: (Int) -> Unit
+) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // ── Title ───────────────────────────────────────────────────
-        Text(
-            text = "Superior Controller",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // ── Status ──────────────────────────────────────────────────
         StatusPanel(
             bluetoothAvailable = bluetoothAvailable,
             isRegistered = isRegistered,
@@ -89,114 +152,66 @@ fun GamepadScreen(
             reportsSent = reportsSent
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
 
-        // ── Control buttons ─────────────────────────────────────────
-        if (!permissionsGranted) {
-            Button(
-                onClick = onRequestPermissions,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Grant Bluetooth Permissions")
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (!bluetoothAvailable) {
-                    Button(
-                        onClick = { viewModel.initializeBluetooth() },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Initialize BT", fontSize = 12.sp)
-                    }
-                }
-
-                if (bluetoothAvailable && proxyReady && !isRegistered) {
-                    Button(
-                        onClick = { viewModel.registerHidApp() },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF2196F3)
-                        )
-                    ) {
-                        Text("Register HID", fontSize = 12.sp)
-                    }
-                }
-
-                if (isRegistered && !isConnected) {
-                    Button(
-                        onClick = {
-                            val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-                                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
-                            }
-                            discoverableLauncher.launch(intent)
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFF9800)
-                        )
-                    ) {
-                        Text("Discoverable", fontSize = 12.sp)
-                    }
-                }
-
-                if (isRegistered) {
-                    OutlinedButton(
-                        onClick = { viewModel.unregisterHidApp() },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Unregister", fontSize = 12.sp)
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // ── Shoulder buttons (L1 / R1) ──────────────────────────────
-        ShoulderButtons(
-            onPress = { viewModel.pressButton(it) },
-            onRelease = { viewModel.releaseButton(it) }
+        ConnectionButtons(
+            viewModel = viewModel,
+            permissionsGranted = permissionsGranted,
+            onRequestPermissions = onRequestPermissions,
+            bluetoothAvailable = bluetoothAvailable,
+            proxyReady = proxyReady,
+            isRegistered = isRegistered,
+            isConnected = isConnected,
+            onMakeDiscoverable = onMakeDiscoverable,
+            modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
 
-        // ── DPad + Action buttons ───────────────────────────────────
+        TriggerRow(onPress = onPress, onRelease = onRelease)
+        Spacer(Modifier.height(4.dp))
+        BumperRow(onPress = onPress, onRelease = onRelease)
+
+        Spacer(Modifier.height(8.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            DPad(
-                onPress = { viewModel.pressButton(it) },
-                onRelease = { viewModel.releaseButton(it) }
+            DPad(onPress = onPress, onRelease = onRelease)
+            ActionButtons(onPress = onPress, onRelease = onRelease)
+        }
+
+        Spacer(Modifier.height(4.dp))
+
+        MenuButtons(onPress = onPress, onRelease = onRelease)
+
+        Spacer(Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.Top
+        ) {
+            VirtualJoystick(
+                onAxisChanged = { x, y -> viewModel.setLeftAxis(x, y) },
+                size = 130.dp,
+                label = stringResource(R.string.label_left_stick)
             )
-            ActionButtons(
-                onPress = { viewModel.pressButton(it) },
-                onRelease = { viewModel.releaseButton(it) }
+            VirtualJoystick(
+                onAxisChanged = { x, y -> viewModel.setRightAxis(x, y) },
+                size = 130.dp,
+                label = stringResource(R.string.label_right_stick),
+                thumbColor = Color(0xFFFF9800)
             )
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))
+        StickClickRow(onPress = onPress, onRelease = onRelease)
 
-        // ── Start / Select ──────────────────────────────────────────
-        MenuButtons(
-            onPress = { viewModel.pressButton(it) },
-            onRelease = { viewModel.releaseButton(it) }
-        )
+        Spacer(Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // ── Virtual joystick ────────────────────────────────────────
-        VirtualJoystick(
-            onAxisChanged = { x, y -> viewModel.setAxis(x, y) }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // ── Neutral / Clear ─────────────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -204,23 +219,215 @@ fun GamepadScreen(
             Button(
                 onClick = { viewModel.sendNeutralReport() },
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF455A64))
-            ) {
-                Text("Send Neutral", fontSize = 12.sp)
-            }
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F))
+            ) { Text(stringResource(R.string.btn_send_neutral), fontSize = 12.sp) }
             OutlinedButton(
                 onClick = { viewModel.clearLog() },
                 modifier = Modifier.weight(1f)
-            ) {
-                Text("Clear Log", fontSize = 12.sp)
+            ) { Text(stringResource(R.string.btn_clear_log), fontSize = 12.sp) }
+        }
+
+        Spacer(Modifier.height(6.dp))
+        DebugLog(messages = logMessages)
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+// ── Landscape ───────────────────────────────────────────────────────────────
+
+@Composable
+private fun LandscapeLayout(
+    viewModel: GamepadViewModel,
+    permissionsGranted: Boolean,
+    onRequestPermissions: () -> Unit,
+    onMakeDiscoverable: () -> Unit,
+    bluetoothAvailable: Boolean,
+    proxyReady: Boolean,
+    isRegistered: Boolean,
+    isConnected: Boolean,
+    connectedDevice: String?,
+    reportsSent: Long,
+    logMessages: List<String>,
+    onPress: (Int) -> Unit,
+    onRelease: (Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        // ── Top bar ─────────────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            CompactStatusDots(bluetoothAvailable, isRegistered, isConnected, connectedDevice, reportsSent)
+
+            ConnectionButtons(
+                viewModel = viewModel,
+                permissionsGranted = permissionsGranted,
+                onRequestPermissions = onRequestPermissions,
+                bluetoothAvailable = bluetoothAvailable,
+                proxyReady = proxyReady,
+                isRegistered = isRegistered,
+                isConnected = isConnected,
+                onMakeDiscoverable = onMakeDiscoverable
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Button(
+                    onClick = { viewModel.sendNeutralReport() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F))
+                ) { Text(stringResource(R.string.btn_send_neutral), fontSize = 10.sp) }
+                OutlinedButton(onClick = { viewModel.clearLog() }) {
+                    Text(stringResource(R.string.btn_clear_log), fontSize = 10.sp)
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
 
-        // ── Debug log ───────────────────────────────────────────────
-        DebugLog(messages = logMessages)
+        // ── Main controls ───────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left column: LT, LB, Left stick, L3
+            Column(
+                modifier = Modifier.weight(0.22f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ControlButton("LT", GamepadButtons.LT, Color(0xFFE65100), onPress, onRelease, width = 80.dp, height = 34.dp, fontSize = 12)
+                Spacer(Modifier.height(2.dp))
+                ControlButton("LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease, width = 80.dp, height = 34.dp, fontSize = 12)
+                Spacer(Modifier.height(4.dp))
+                VirtualJoystick(
+                    onAxisChanged = { x, y -> viewModel.setLeftAxis(x, y) },
+                    size = 110.dp,
+                    label = stringResource(R.string.label_left_stick)
+                )
+                ControlButton("L3", GamepadButtons.L3, Color(0xFF546E7A), onPress, onRelease, width = 50.dp, height = 28.dp, fontSize = 10)
+            }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            // Center: DPad + Menu + ABXY
+            Column(
+                modifier = Modifier.weight(0.56f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DPad(onPress = onPress, onRelease = onRelease, btnWidth = 42.dp, btnHeight = 36.dp, offset = 38.dp)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        MenuButtons(onPress = onPress, onRelease = onRelease)
+                    }
+                    ActionButtons(onPress = onPress, onRelease = onRelease, buttonSize = 46.dp, spacing = 32.dp)
+                }
+            }
+
+            // Right column: RT, RB, Right stick, R3
+            Column(
+                modifier = Modifier.weight(0.22f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ControlButton("RT", GamepadButtons.RT, Color(0xFFE65100), onPress, onRelease, width = 80.dp, height = 34.dp, fontSize = 12)
+                Spacer(Modifier.height(2.dp))
+                ControlButton("RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease, width = 80.dp, height = 34.dp, fontSize = 12)
+                Spacer(Modifier.height(4.dp))
+                VirtualJoystick(
+                    onAxisChanged = { x, y -> viewModel.setRightAxis(x, y) },
+                    size = 110.dp,
+                    label = stringResource(R.string.label_right_stick),
+                    thumbColor = Color(0xFFFF9800)
+                )
+                ControlButton("R3", GamepadButtons.R3, Color(0xFF546E7A), onPress, onRelease, width = 50.dp, height = 28.dp, fontSize = 10)
+            }
+        }
+
+        // ── Bottom debug ────────────────────────────────────────
+        DebugLog(messages = logMessages, maxHeight = 56.dp, minHeight = 36.dp)
+    }
+}
+
+// ── Shared composables ──────────────────────────────────────────────────────
+
+@Composable
+private fun CompactStatusDots(
+    bt: Boolean,
+    reg: Boolean,
+    conn: Boolean,
+    deviceName: String?,
+    reports: Long
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val green = Color(0xFF4CAF50)
+        val red = Color(0xFFB71C1C)
+        StatusDot(bt, green, red)
+        Spacer(Modifier.width(4.dp))
+        StatusDot(reg, green, red)
+        Spacer(Modifier.width(4.dp))
+        StatusDot(conn, green, red)
+        Spacer(Modifier.width(6.dp))
+        val info = buildString {
+            if (conn && deviceName != null) append(deviceName).append(" | ")
+            append(reports)
+        }
+        Text(info, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun StatusDot(active: Boolean, activeColor: Color, inactiveColor: Color) {
+    val color by animateColorAsState(if (active) activeColor else inactiveColor, label = "dot")
+    Box(Modifier.size(8.dp).background(color, CircleShape))
+}
+
+@Composable
+private fun ConnectionButtons(
+    viewModel: GamepadViewModel,
+    permissionsGranted: Boolean,
+    onRequestPermissions: () -> Unit,
+    bluetoothAvailable: Boolean,
+    proxyReady: Boolean,
+    isRegistered: Boolean,
+    isConnected: Boolean,
+    onMakeDiscoverable: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (!permissionsGranted) {
+            Button(onClick = onRequestPermissions) {
+                Text(stringResource(R.string.btn_grant_permissions), fontSize = 11.sp)
+            }
+            return@Row
+        }
+        if (!bluetoothAvailable) {
+            Button(onClick = { viewModel.initializeBluetooth() }) {
+                Text(stringResource(R.string.btn_initialize_bt), fontSize = 11.sp)
+            }
+        }
+        if (bluetoothAvailable && proxyReady && !isRegistered) {
+            Button(
+                onClick = { viewModel.registerHidApp() },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
+            ) { Text(stringResource(R.string.btn_register_hid), fontSize = 11.sp) }
+        }
+        if (isRegistered && !isConnected) {
+            Button(
+                onClick = onMakeDiscoverable,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+            ) { Text(stringResource(R.string.btn_discoverable), fontSize = 11.sp) }
+        }
+        if (isRegistered) {
+            OutlinedButton(onClick = { viewModel.unregisterHidApp() }) {
+                Text(stringResource(R.string.btn_unregister), fontSize = 11.sp)
+            }
+        }
     }
 }

@@ -2,39 +2,58 @@ package com.example.superiorcontroller.ui.components
 
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.superiorcontroller.hid.GamepadButtons
 
-private val SHOULDER_COLOR = Color(0xFFFF9800)
-private val MENU_COLOR = Color(0xFF009688)
+private val BUMPER_COLOR = Color(0xFFFF9800)
+private val TRIGGER_COLOR = Color(0xFFE65100)
+private val MENU_COLOR = Color(0xFF00897B)
+private val STICK_CLICK_COLOR = Color(0xFF546E7A)
 
 @Composable
-fun ShoulderButtons(
+fun BumperRow(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        TriggerButton("L1", GamepadButtons.L1, SHOULDER_COLOR, onPress, onRelease)
-        TriggerButton("R1", GamepadButtons.R1, SHOULDER_COLOR, onPress, onRelease)
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        ControlButton("LB", GamepadButtons.LB, BUMPER_COLOR, onPress, onRelease)
+        ControlButton("RB", GamepadButtons.RB, BUMPER_COLOR, onPress, onRelease)
+    }
+}
+
+@Composable
+fun TriggerRow(
+    onPress: (Int) -> Unit,
+    onRelease: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        ControlButton("LT", GamepadButtons.LT, TRIGGER_COLOR, onPress, onRelease)
+        ControlButton("RT", GamepadButtons.RT, TRIGGER_COLOR, onPress, onRelease)
     }
 }
 
@@ -44,50 +63,61 @@ fun MenuButtons(
     onRelease: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center
-    ) {
-        TriggerButton(
-            "SELECT", GamepadButtons.SELECT, MENU_COLOR, onPress, onRelease,
-            widthDp = 90
-        )
-        TriggerButton(
-            "START", GamepadButtons.START, MENU_COLOR, onPress, onRelease,
-            modifier = Modifier.padding(start = 24.dp),
-            widthDp = 90
-        )
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        ControlButton("BACK", GamepadButtons.BACK, MENU_COLOR, onPress, onRelease, width = 80.dp)
+        ControlButton("START", GamepadButtons.START, MENU_COLOR, onPress, onRelease, width = 80.dp)
     }
 }
 
 @Composable
-private fun TriggerButton(
+fun StickClickRow(
+    onPress: (Int) -> Unit,
+    onRelease: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        ControlButton("L3", GamepadButtons.L3, STICK_CLICK_COLOR, onPress, onRelease, width = 56.dp, height = 32.dp, fontSize = 11)
+        ControlButton("R3", GamepadButtons.R3, STICK_CLICK_COLOR, onPress, onRelease, width = 56.dp, height = 32.dp, fontSize = 11)
+    }
+}
+
+@Composable
+fun ControlButton(
     label: String,
     button: Int,
     color: Color,
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    widthDp: Int = 100
+    width: Dp = 100.dp,
+    height: Dp = 38.dp,
+    fontSize: Int = 13
 ) {
-    Button(
-        onClick = {},
+    val haptic = LocalHapticFeedback.current
+    var pressed by remember { mutableStateOf(false) }
+
+    Surface(
         modifier = modifier
-            .width(widthDp.dp)
-            .height(40.dp)
+            .width(width)
+            .height(height)
             .pointerInput(button) {
                 detectTapGestures(
                     onPress = {
+                        pressed = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onPress(button)
                         tryAwaitRelease()
+                        pressed = false
                         onRelease(button)
                     }
                 )
             },
         shape = RoundedCornerShape(8.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = color),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+        color = if (pressed) color.copy(alpha = 0.6f) else color,
+        shadowElevation = if (pressed) 1.dp else 4.dp
     ) {
-        Text(text = label, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Text(text = label, fontWeight = FontWeight.Bold, fontSize = fontSize.sp, color = Color.White)
+        }
     }
 }
