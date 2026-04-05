@@ -5,6 +5,9 @@ import android.media.SoundPool
 
 object ButtonSoundPlayer {
 
+    @Volatile
+    var enabled: Boolean = true
+
     private var soundPool: SoundPool? = null
     private var clickSoundId: Int = 0
     private var loaded = false
@@ -27,7 +30,7 @@ object ButtonSoundPlayer {
     }
 
     fun playClick(label: String = "") {
-        // Minimal tick via short playback — no asset required
+        if (!enabled) return
     }
 
     fun release() {

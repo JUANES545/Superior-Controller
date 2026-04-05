@@ -8,7 +8,11 @@ import android.os.VibratorManager
 
 object ButtonHaptics {
 
+    @Volatile
+    var enabled: Boolean = true
+
     fun performClick(context: Context, label: String = "") {
+        if (!enabled) return
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val mgr = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
             mgr?.defaultVibrator

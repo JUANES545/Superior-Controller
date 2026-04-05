@@ -22,11 +22,16 @@ data class PlaybackProgress(
 class PlaybackEngine {
 
     interface EventSink {
-        fun onPlaybackButton(press: Boolean, button: Int)
+        fun onPlaybackReset()
+        fun onPlaybackApplySnapshot(snapshot: GamepadSnapshot)
+        fun onPlaybackButtonPress(button: Int)
+        fun onPlaybackButtonRelease(button: Int)
         fun onPlaybackLeftAxis(x: Float, y: Float)
         fun onPlaybackRightAxis(x: Float, y: Float)
         fun onPlaybackLeftTrigger(value: Float)
         fun onPlaybackRightTrigger(value: Float)
+        fun onPlaybackComplete()
+        fun onPlaybackLog(message: String)
     }
 
     var sink: EventSink? = null
@@ -49,12 +54,10 @@ class PlaybackEngine {
             recordingName = data.name
         )
 
+        sink?.onPlaybackReset()
         val snapshot = data.initialSnapshot
         if (snapshot != null) {
-            sink?.onPlaybackLeftAxis(snapshot.leftX, snapshot.leftY)
-            sink?.onPlaybackRightAxis(snapshot.rightX, snapshot.rightY)
-            sink?.onPlaybackLeftTrigger(snapshot.leftTrigger)
-            sink?.onPlaybackRightTrigger(snapshot.rightTrigger)
+            sink?.onPlaybackApplySnapshot(snapshot)
         }
 
         playJob = scope.launch {
@@ -92,6 +95,8 @@ class PlaybackEngine {
             }
 
             delay(RESET_SETTLE_MS)
+            sink?.onPlaybackReset()
+            sink?.onPlaybackComplete()
             _progress.value = PlaybackProgress()
         }
     }
@@ -116,8 +121,8 @@ class PlaybackEngine {
     private fun dispatchEvent(event: RecordedEvent) {
         val s = sink ?: return
         when (event.type) {
-            EventType.BUTTON_PRESS -> s.onPlaybackButton(true, event.btn)
-            EventType.BUTTON_RELEASE -> s.onPlaybackButton(false, event.btn)
+            EventType.BUTTON_PRESS -> s.onPlaybackButtonPress(event.btn)
+            EventType.BUTTON_RELEASE -> s.onPlaybackButtonRelease(event.btn)
             EventType.LEFT_AXIS -> s.onPlaybackLeftAxis(event.x, event.y)
             EventType.RIGHT_AXIS -> s.onPlaybackRightAxis(event.x, event.y)
             EventType.LEFT_TRIGGER -> s.onPlaybackLeftTrigger(event.x)
