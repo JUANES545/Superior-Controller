@@ -48,7 +48,7 @@ class BluetoothHidManager(private val context: Context) {
     var failCount: Long = 0; private set
 
     companion object {
-        const val MIN_INTERVAL_MS = 25L
+        const val MIN_INTERVAL_MS = 8L
     }
 
     private fun markOp(name: String) {
@@ -223,8 +223,8 @@ class BluetoothHidManager(private val context: Context) {
         return result
     }
 
-    fun registerApp(reason: String = "UNKNOWN"): Boolean {
-        markOp("registerApp($reason)")
+    fun registerApp(reason: String = "UNKNOWN", profile: String = "xbox"): Boolean {
+        markOp("registerApp($reason, profile=$profile)")
         if (_isRegistered) {
             listener?.onLog("REGISTER_GUARD: already registered — skipping reason=$reason | ${stateSnapshot()}")
             return true
@@ -235,16 +235,17 @@ class BluetoothHidManager(private val context: Context) {
         }
 
         listener?.onLog(
-            "REGISTER_PRE: reason=$reason thread=${Thread.currentThread().name} | ${stateSnapshot()}"
+            "REGISTER_PRE: reason=$reason profile=$profile thread=${Thread.currentThread().name} | ${stateSnapshot()}"
         )
 
+        val descriptor = HidDescriptor.descriptorForProfile(profile)
         val sdpSettings = BluetoothHidDeviceAppSdpSettings(
             "Superior Controller",
             "Android Bluetooth HID Gamepad",
             "SuperiorController",
             BluetoothHidDevice.SUBCLASS1_NONE.toInt()
                 .or(BluetoothHidDevice.SUBCLASS2_GAMEPAD.toInt()).toByte(),
-            HidDescriptor.GAMEPAD_DESCRIPTOR
+            descriptor
         )
 
         val success = hid.registerApp(sdpSettings, null, null, context.mainExecutor, hidCallback)

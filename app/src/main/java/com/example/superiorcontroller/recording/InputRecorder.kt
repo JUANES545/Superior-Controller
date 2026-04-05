@@ -116,7 +116,7 @@ class InputRecorder {
 
     companion object {
         private const val NS_PER_MS = 1_000_000L
-        private const val AXIS_THROTTLE_MS = 16L
+        private const val AXIS_THROTTLE_MS = 4L
         private const val AXIS_DELTA = 0.01f
         private const val TRIGGER_DELTA = 0.02f
     }

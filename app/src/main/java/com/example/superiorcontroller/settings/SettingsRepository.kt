@@ -12,17 +12,24 @@ class SettingsRepository(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
+    private val _controllerProfile = MutableStateFlow(prefs.getString(Keys.CONTROLLER_PROFILE, PROFILE_XBOX) ?: PROFILE_XBOX)
     private val _hapticsEnabled = MutableStateFlow(prefs.getBoolean(Keys.HAPTICS, true))
     private val _soundEnabled = MutableStateFlow(prefs.getBoolean(Keys.SOUND, true))
     private val _triggerMode = MutableStateFlow(prefs.getString(Keys.TRIGGER_MODE, MODE_ANALOG) ?: MODE_ANALOG)
     private val _debugLogVisible = MutableStateFlow(prefs.getBoolean(Keys.DEBUG_LOG, false))
     private val _debugLogOverlay = MutableStateFlow(prefs.getBoolean(Keys.DEBUG_OVERLAY, false))
 
+    val controllerProfile: Flow<String> = _controllerProfile
     val hapticsEnabled: Flow<Boolean> = _hapticsEnabled
     val soundEnabled: Flow<Boolean> = _soundEnabled
     val triggerMode: Flow<String> = _triggerMode
     val debugLogVisible: Flow<Boolean> = _debugLogVisible
     val debugLogOverlay: Flow<Boolean> = _debugLogOverlay
+
+    suspend fun setControllerProfile(profile: String) {
+        withContext(Dispatchers.IO) { prefs.edit().putString(Keys.CONTROLLER_PROFILE, profile).apply() }
+        _controllerProfile.value = profile
+    }
 
     suspend fun setHapticsEnabled(enabled: Boolean) {
         withContext(Dispatchers.IO) { prefs.edit().putBoolean(Keys.HAPTICS, enabled).apply() }
@@ -50,6 +57,7 @@ class SettingsRepository(context: Context) {
     }
 
     private object Keys {
+        const val CONTROLLER_PROFILE = "controller_profile"
         const val HAPTICS = "haptics_enabled"
         const val SOUND = "sound_enabled"
         const val TRIGGER_MODE = "trigger_mode"
@@ -60,5 +68,7 @@ class SettingsRepository(context: Context) {
     companion object {
         const val MODE_ANALOG = "analog"
         const val MODE_BUTTON = "button"
+        const val PROFILE_XBOX = "xbox"
+        const val PROFILE_PLAYSTATION = "playstation"
     }
 }

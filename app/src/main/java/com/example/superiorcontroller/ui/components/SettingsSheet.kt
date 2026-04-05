@@ -28,11 +28,13 @@ import com.example.superiorcontroller.R
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSheet(
+    controllerProfile: String,
     hapticsEnabled: Boolean,
     soundEnabled: Boolean,
     triggerMode: String,
     debugLogVisible: Boolean,
     debugLogOverlay: Boolean,
+    onProfileChange: (String) -> Unit,
     onToggleHaptics: (Boolean) -> Unit,
     onToggleSound: (Boolean) -> Unit,
     onTriggerModeChange: (String) -> Unit,
@@ -54,6 +56,32 @@ fun SettingsSheet(
                 style = MaterialTheme.typography.titleLarge
             )
             Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = stringResource(R.string.settings_profile_title),
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = stringResource(R.string.settings_profile_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = controllerProfile == "xbox",
+                    onClick = { onProfileChange("xbox") },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                ) { Text("Xbox") }
+                SegmentedButton(
+                    selected = controllerProfile == "playstation",
+                    onClick = { onProfileChange("playstation") },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                ) { Text("PlayStation") }
+            }
+
+            Spacer(Modifier.height(12.dp))
 
             SettingsToggle(
                 title = stringResource(R.string.settings_haptics_title),

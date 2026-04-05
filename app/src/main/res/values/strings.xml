@@ -74,6 +74,8 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
+    <string name="settings_profile_title">Controller profile</string>
+    <string name="settings_profile_desc">Changes HID descriptor and button labels</string>
     <string name="settings_haptics_title">Button vibration</string>
     <string name="settings_haptics_desc">Vibrate on button press</string>
     <string name="settings_sound_title">Button sound</string>

@@ -103,6 +103,7 @@ fun GamepadScreen(
         )
     }
 
+    val controllerProfile by viewModel.controllerProfile.collectAsState()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
     val soundEnabled by viewModel.soundEnabled.collectAsState()
     val triggerMode by viewModel.triggerMode.collectAsState()
@@ -189,6 +190,7 @@ fun GamepadScreen(
                 triggerButtonMode = triggerButtonMode,
                 debugLogVisible = debugLogVisible,
                 debugLogOverlay = debugLogOverlay,
+                psProfile = controllerProfile == "playstation",
                 gsButtons = gsButtons,
                 gsLeftX = gsLeftX, gsLeftY = gsLeftY,
                 gsRightX = gsRightX, gsRightY = gsRightY,
@@ -208,6 +210,7 @@ fun GamepadScreen(
                 triggerButtonMode = triggerButtonMode,
                 debugLogVisible = debugLogVisible,
                 debugLogOverlay = debugLogOverlay,
+                psProfile = controllerProfile == "playstation",
                 gsButtons = gsButtons,
                 gsLeftX = gsLeftX, gsLeftY = gsLeftY,
                 gsRightX = gsRightX, gsRightY = gsRightY,
@@ -348,11 +351,13 @@ fun GamepadScreen(
 
     if (showSettings) {
         SettingsSheet(
+            controllerProfile = controllerProfile,
             hapticsEnabled = hapticsEnabled,
             soundEnabled = soundEnabled,
             triggerMode = triggerMode,
             debugLogVisible = debugLogVisible,
             debugLogOverlay = debugLogOverlay,
+            onProfileChange = { viewModel.setControllerProfile(it) },
             onToggleHaptics = { viewModel.toggleHaptics(it) },
             onToggleSound = { viewModel.toggleSound(it) },
             onTriggerModeChange = { viewModel.setTriggerMode(it) },
@@ -429,6 +434,7 @@ private fun PortraitLayout(
     triggerButtonMode: Boolean,
     debugLogVisible: Boolean,
     debugLogOverlay: Boolean,
+    psProfile: Boolean,
     gsButtons: Int,
     gsLeftX: Float, gsLeftY: Float,
     gsRightX: Float, gsRightY: Float,
@@ -458,7 +464,8 @@ private fun PortraitLayout(
 
         TriggerRow(
             onLeftTrigger = onLeftTrigger, onRightTrigger = onRightTrigger,
-            buttonMode = triggerButtonMode, hwLeftTrigger = gsLT, hwRightTrigger = gsRT
+            buttonMode = triggerButtonMode, hwLeftTrigger = gsLT, hwRightTrigger = gsRT,
+            psProfile = psProfile
         )
         Spacer(Modifier.height(4.dp))
 
@@ -468,7 +475,8 @@ private fun PortraitLayout(
             hwButtons = gsButtons,
             hwConnected = hwConnected,
             hwDeviceName = hwDeviceName,
-            hwType = hwType
+            hwType = hwType,
+            psProfile = psProfile
         )
 
         Spacer(Modifier.height(8.dp))
@@ -479,12 +487,12 @@ private fun PortraitLayout(
             verticalAlignment = Alignment.CenterVertically
         ) {
             DPad(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
-            ActionButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
+            ActionButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons, psProfile = psProfile)
         }
 
         Spacer(Modifier.height(4.dp))
 
-        MenuButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
+        MenuButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons, psProfile = psProfile)
 
         Spacer(Modifier.height(8.dp))
 
@@ -558,6 +566,7 @@ private fun LandscapeLayout(
     triggerButtonMode: Boolean,
     debugLogVisible: Boolean,
     debugLogOverlay: Boolean,
+    psProfile: Boolean,
     gsButtons: Int,
     gsLeftX: Float, gsLeftY: Float,
     gsRightX: Float, gsRightY: Float,
@@ -580,10 +589,10 @@ private fun LandscapeLayout(
                 .fillMaxHeight(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            GamepadTrigger("LT", onValueChanged = onLeftTrigger, buttonMode = triggerButtonMode,
+            GamepadTrigger(if (psProfile) "L2" else "LT", onValueChanged = onLeftTrigger, buttonMode = triggerButtonMode,
                 hwValue = gsLT)
             Spacer(Modifier.height(4.dp))
-            ControlButton("LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease,
+            ControlButton(if (psProfile) "L1" else "LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease,
                 hwPressed = (gsButtons and GamepadButtons.LB) != 0, width = 78.dp, height = 30.dp, fontSize = 12)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -642,7 +651,7 @@ private fun LandscapeLayout(
                     DPad(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons,
                         btnWidth = 40.dp, btnHeight = 34.dp, offset = 36.dp)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        MenuButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
+                        MenuButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons, psProfile = psProfile)
                         if (debugLogVisible) {
                             Spacer(Modifier.height(4.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -662,7 +671,7 @@ private fun LandscapeLayout(
                         }
                     }
                     ActionButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons,
-                        buttonSize = 44.dp, spacing = 30.dp)
+                        buttonSize = 44.dp, spacing = 30.dp, psProfile = psProfile)
                 }
             }
 
@@ -687,10 +696,10 @@ private fun LandscapeLayout(
                 .fillMaxHeight(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            GamepadTrigger("RT", onValueChanged = onRightTrigger, buttonMode = triggerButtonMode,
+            GamepadTrigger(if (psProfile) "R2" else "RT", onValueChanged = onRightTrigger, buttonMode = triggerButtonMode,
                 hwValue = gsRT)
             Spacer(Modifier.height(4.dp))
-            ControlButton("RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease,
+            ControlButton(if (psProfile) "R1" else "RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease,
                 hwPressed = (gsButtons and GamepadButtons.RB) != 0, width = 78.dp, height = 30.dp, fontSize = 12)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -718,15 +727,18 @@ private fun InputBumperRow(
     hwButtons: Int,
     hwConnected: Boolean,
     hwDeviceName: String?,
-    hwType: HwConnectionType
+    hwType: HwConnectionType,
+    psProfile: Boolean = false
 ) {
+    val lbLabel = if (psProfile) "L1" else "LB"
+    val rbLabel = if (psProfile) "R1" else "RB"
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         ControlButton(
-            "LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease,
+            lbLabel, GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease,
             hwPressed = (hwButtons and GamepadButtons.LB) != 0
         )
 
@@ -738,7 +750,7 @@ private fun InputBumperRow(
         )
 
         ControlButton(
-            "RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease,
+            rbLabel, GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease,
             hwPressed = (hwButtons and GamepadButtons.RB) != 0
         )
     }

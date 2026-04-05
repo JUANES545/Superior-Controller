@@ -65,11 +65,14 @@ fun TriggerRow(
     modifier: Modifier = Modifier,
     buttonMode: Boolean = false,
     hwLeftTrigger: Float = 0f,
-    hwRightTrigger: Float = 0f
+    hwRightTrigger: Float = 0f,
+    psProfile: Boolean = false
 ) {
+    val ltLabel = if (psProfile) "L2" else "LT"
+    val rtLabel = if (psProfile) "R2" else "RT"
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        GamepadTrigger("LT", onValueChanged = onLeftTrigger, buttonMode = buttonMode, hwValue = hwLeftTrigger)
-        GamepadTrigger("RT", onValueChanged = onRightTrigger, buttonMode = buttonMode, hwValue = hwRightTrigger)
+        GamepadTrigger(ltLabel, onValueChanged = onLeftTrigger, buttonMode = buttonMode, hwValue = hwLeftTrigger)
+        GamepadTrigger(rtLabel, onValueChanged = onRightTrigger, buttonMode = buttonMode, hwValue = hwRightTrigger)
     }
 }
 
@@ -238,12 +241,15 @@ fun BumperRow(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    hwButtons: Int = 0
+    hwButtons: Int = 0,
+    psProfile: Boolean = false
 ) {
+    val lbLabel = if (psProfile) "L1" else "LB"
+    val rbLabel = if (psProfile) "R1" else "RB"
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        ControlButton("LB", GamepadButtons.LB, BUMPER_COLOR, onPress, onRelease,
+        ControlButton(lbLabel, GamepadButtons.LB, BUMPER_COLOR, onPress, onRelease,
             hwPressed = (hwButtons and GamepadButtons.LB) != 0)
-        ControlButton("RB", GamepadButtons.RB, BUMPER_COLOR, onPress, onRelease,
+        ControlButton(rbLabel, GamepadButtons.RB, BUMPER_COLOR, onPress, onRelease,
             hwPressed = (hwButtons and GamepadButtons.RB) != 0)
     }
 }
@@ -253,18 +259,21 @@ fun MenuButtons(
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    hwButtons: Int = 0
+    hwButtons: Int = 0,
+    psProfile: Boolean = false
 ) {
+    val backLabel = if (psProfile) "SHARE" else "BACK"
+    val startLabel = if (psProfile) "OPTIONS" else "START"
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ControlButton("BACK", GamepadButtons.BACK, MENU_COLOR, onPress, onRelease, width = 72.dp,
+        ControlButton(backLabel, GamepadButtons.BACK, MENU_COLOR, onPress, onRelease, width = 72.dp,
             hwPressed = (hwButtons and GamepadButtons.BACK) != 0)
         HomeButton(onPress = onPress, onRelease = onRelease,
             hwPressed = (hwButtons and GamepadButtons.HOME) != 0)
-        ControlButton("START", GamepadButtons.START, MENU_COLOR, onPress, onRelease, width = 72.dp,
+        ControlButton(startLabel, GamepadButtons.START, MENU_COLOR, onPress, onRelease, width = 72.dp,
             hwPressed = (hwButtons and GamepadButtons.START) != 0)
     }
 }

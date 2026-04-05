@@ -78,6 +78,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     // ── Settings ────────────────────────────────────────────────────────
 
+    private val _controllerProfile = MutableStateFlow(SettingsRepository.PROFILE_XBOX)
+    val controllerProfile: StateFlow<String> = _controllerProfile.asStateFlow()
+
     private val _hapticsEnabled = MutableStateFlow(true)
     val hapticsEnabled: StateFlow<Boolean> = _hapticsEnabled.asStateFlow()
 
@@ -336,6 +339,19 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         addLog("Mode: 11btn+2trig | report=${HidDescriptor.REPORT_SIZE}B | throttle=${BluetoothHidManager.MIN_INTERVAL_MS}ms")
 
         viewModelScope.launch {
+            settingsRepo.controllerProfile.collect { profile ->
+                val prev = _controllerProfile.value
+                _controllerProfile.value = profile
+                if (prev != profile && _isRegistered.value) {
+                    addLog("PROFILE_CHANGE: $prev → $profile, re-registering HID")
+                    hidManager.unregisterApp()
+                    hidManager.registerApp(reason = "PROFILE_CHANGE", profile = profile)
+                } else {
+                    addLog("Settings: controllerProfile=$profile")
+                }
+            }
+        }
+        viewModelScope.launch {
             settingsRepo.hapticsEnabled.collect { enabled ->
                 _hapticsEnabled.value = enabled
                 ButtonHaptics.enabled = enabled
@@ -433,7 +449,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         if (!hidManager.isRegistered) {
             addLog("PROCEED_LAZY: registering first, then connecting to $address")
             pendingConnectAfterRegister = address
-            hidManager.registerApp(reason = "LAZY_REGISTER_FOR_CONNECT")
+            hidManager.registerApp(reason = "LAZY_REGISTER_FOR_CONNECT", profile = _controllerProfile.value)
             return
         }
         addLog("PROCEED_SWITCH: switching to $address | ${diagnosticState()}")
@@ -452,7 +468,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     fun registerHidApp() {
         if (!hidManager.isProxyReady()) { addLog("MANUAL_REGISTER_FAIL: proxy not ready"); return }
         addLog("MANUAL_REGISTER: user requested (hw=${_hwConnected.value}) | ${diagnosticState()}")
-        hidManager.registerApp(reason = "USER_MANUAL_REGISTER")
+        hidManager.registerApp(reason = "USER_MANUAL_REGISTER", profile = _controllerProfile.value)
     }
 
     fun unregisterHidApp() {
@@ -479,7 +495,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         if (!hidManager.isRegistered) {
             addLog("KNOWN_CONNECT_LAZY: not registered — registering first for $address")
             pendingConnectAfterRegister = address
-            hidManager.registerApp(reason = "LAZY_REGISTER_FOR_KNOWN_CONNECT")
+            hidManager.registerApp(reason = "LAZY_REGISTER_FOR_KNOWN_CONNECT", profile = _controllerProfile.value)
             return
         }
         hidManager.connectToAddress(address, reason = "USER_CONNECT_KNOWN")
@@ -623,8 +639,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             .coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX)
         val prev = _gamepadState.value.leftTrigger
         _gamepadState.value = _gamepadState.value.withLeftTrigger(value)
-        if (value == TriggerDefaults.REST && prev != TriggerDefaults.REST) {
-            sendForced("RELEASE LT")
+        if (fromPlayback || (value == TriggerDefaults.REST && prev != TriggerDefaults.REST)) {
+            sendForced(if (fromPlayback) "[PB] LT" else "RELEASE LT")
         } else {
             sendThrottled()
         }
@@ -638,8 +654,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             .coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX)
         val prev = _gamepadState.value.rightTrigger
         _gamepadState.value = _gamepadState.value.withRightTrigger(value)
-        if (value == TriggerDefaults.REST && prev != TriggerDefaults.REST) {
-            sendForced("RELEASE RT")
+        if (fromPlayback || (value == TriggerDefaults.REST && prev != TriggerDefaults.REST)) {
+            sendForced(if (fromPlayback) "[PB] RT" else "RELEASE RT")
         } else {
             sendThrottled()
         }
@@ -654,7 +670,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         val y = ((normalizedY + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         _gamepadState.value = _gamepadState.value.withLeftAxis(x, y)
-        sendThrottled()
+        if (fromPlayback) sendForced("[PB] L-Axis") else sendThrottled()
     }
 
     fun setRightAxis(normalizedX: Float, normalizedY: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
@@ -664,7 +680,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         val y = ((normalizedY + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         _gamepadState.value = _gamepadState.value.withRightAxis(x, y)
-        sendThrottled()
+        if (fromPlayback) sendForced("[PB] R-Axis") else sendThrottled()
     }
 
     // ── Recording controls ──────────────────────────────────────────────
@@ -830,6 +846,10 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun clearLog() { _logMessages.value = emptyList() }
+
+    fun setControllerProfile(profile: String) {
+        viewModelScope.launch { settingsRepo.setControllerProfile(profile) }
+    }
 
     fun toggleHaptics(enabled: Boolean) {
         viewModelScope.launch { settingsRepo.setHapticsEnabled(enabled) }

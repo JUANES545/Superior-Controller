@@ -74,6 +74,8 @@
 
     <!-- Configuración -->
     <string name="settings_title">Configuración</string>
+    <string name="settings_profile_title">Perfil de control</string>
+    <string name="settings_profile_desc">Cambia el descriptor HID y las etiquetas de botones</string>
     <string name="settings_haptics_title">Vibración de botones</string>
     <string name="settings_haptics_desc">Vibrar al presionar botones</string>
     <string name="settings_sound_title">Sonido de botones</string>

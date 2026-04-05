@@ -33,28 +33,48 @@ fun ActionButtons(
     modifier: Modifier = Modifier,
     hwButtons: Int = 0,
     buttonSize: Dp = 52.dp,
-    spacing: Dp = 36.dp
+    spacing: Dp = 36.dp,
+    psProfile: Boolean = false
 ) {
     Box(
         modifier = modifier.size(buttonSize * 2 + spacing),
         contentAlignment = Alignment.Center
     ) {
-        GamepadFaceButton("Y", Color(0xFFFFEB3B), Color.Black, buttonSize,
-            { onPress(GamepadButtons.Y) }, { onRelease(GamepadButtons.Y) },
-            Modifier.offset(y = -spacing),
-            hwPressed = (hwButtons and GamepadButtons.Y) != 0)
-        GamepadFaceButton("A", Color(0xFF4CAF50), Color.White, buttonSize,
-            { onPress(GamepadButtons.A) }, { onRelease(GamepadButtons.A) },
-            Modifier.offset(y = spacing),
-            hwPressed = (hwButtons and GamepadButtons.A) != 0)
-        GamepadFaceButton("X", Color(0xFF2196F3), Color.White, buttonSize,
-            { onPress(GamepadButtons.X) }, { onRelease(GamepadButtons.X) },
-            Modifier.offset(x = -spacing),
-            hwPressed = (hwButtons and GamepadButtons.X) != 0)
-        GamepadFaceButton("B", Color(0xFFF44336), Color.White, buttonSize,
-            { onPress(GamepadButtons.B) }, { onRelease(GamepadButtons.B) },
-            Modifier.offset(x = spacing),
-            hwPressed = (hwButtons and GamepadButtons.B) != 0)
+        if (psProfile) {
+            GamepadFaceButton("△", Color(0xFF00BFA5), Color.White, buttonSize,
+                { onPress(GamepadButtons.Y) }, { onRelease(GamepadButtons.Y) },
+                Modifier.offset(y = -spacing),
+                hwPressed = (hwButtons and GamepadButtons.Y) != 0)
+            GamepadFaceButton("✕", Color(0xFF5C6BC0), Color.White, buttonSize,
+                { onPress(GamepadButtons.A) }, { onRelease(GamepadButtons.A) },
+                Modifier.offset(y = spacing),
+                hwPressed = (hwButtons and GamepadButtons.A) != 0)
+            GamepadFaceButton("□", Color(0xFFEC407A), Color.White, buttonSize,
+                { onPress(GamepadButtons.X) }, { onRelease(GamepadButtons.X) },
+                Modifier.offset(x = -spacing),
+                hwPressed = (hwButtons and GamepadButtons.X) != 0)
+            GamepadFaceButton("○", Color(0xFFEF5350), Color.White, buttonSize,
+                { onPress(GamepadButtons.B) }, { onRelease(GamepadButtons.B) },
+                Modifier.offset(x = spacing),
+                hwPressed = (hwButtons and GamepadButtons.B) != 0)
+        } else {
+            GamepadFaceButton("Y", Color(0xFFFFEB3B), Color.Black, buttonSize,
+                { onPress(GamepadButtons.Y) }, { onRelease(GamepadButtons.Y) },
+                Modifier.offset(y = -spacing),
+                hwPressed = (hwButtons and GamepadButtons.Y) != 0)
+            GamepadFaceButton("A", Color(0xFF4CAF50), Color.White, buttonSize,
+                { onPress(GamepadButtons.A) }, { onRelease(GamepadButtons.A) },
+                Modifier.offset(y = spacing),
+                hwPressed = (hwButtons and GamepadButtons.A) != 0)
+            GamepadFaceButton("X", Color(0xFF2196F3), Color.White, buttonSize,
+                { onPress(GamepadButtons.X) }, { onRelease(GamepadButtons.X) },
+                Modifier.offset(x = -spacing),
+                hwPressed = (hwButtons and GamepadButtons.X) != 0)
+            GamepadFaceButton("B", Color(0xFFF44336), Color.White, buttonSize,
+                { onPress(GamepadButtons.B) }, { onRelease(GamepadButtons.B) },
+                Modifier.offset(x = spacing),
+                hwPressed = (hwButtons and GamepadButtons.B) != 0)
+        }
     }
 }
 
