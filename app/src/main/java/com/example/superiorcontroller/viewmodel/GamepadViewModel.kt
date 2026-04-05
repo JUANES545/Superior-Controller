@@ -80,6 +80,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     private val _controllerProfile = MutableStateFlow(SettingsRepository.PROFILE_XBOX)
     val controllerProfile: StateFlow<String> = _controllerProfile.asStateFlow()
+    private val isPsProfile: Boolean get() = _controllerProfile.value == SettingsRepository.PROFILE_PLAYSTATION
 
     private val _hapticsEnabled = MutableStateFlow(true)
     val hapticsEnabled: StateFlow<Boolean> = _hapticsEnabled.asStateFlow()
@@ -285,7 +286,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         override fun onPlaybackReset() {
             _gamepadState.value = GamepadState()
             if (_isConnected.value) {
-                hidManager.sendReport(GamepadReportBuilder.neutralReport(), force = true)
+                hidManager.sendReport(GamepadReportBuilder.neutralReport(isPsProfile), force = true)
             }
             addLog("PB_RESET: neutral")
         }
@@ -311,7 +312,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             )
             if (_isConnected.value) {
                 hidManager.sendReport(
-                    GamepadReportBuilder.buildReport(_gamepadState.value), force = true
+                    GamepadReportBuilder.buildReport(_gamepadState.value, isPsProfile), force = true
                 )
             }
             addLog("PB_SNAPSHOT: applied")
@@ -593,7 +594,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
         val s = _gamepadState.value
         val name = buttonName(button)
-        val report = GamepadReportBuilder.buildReport(s)
+        val report = GamepadReportBuilder.buildReport(s, isPsProfile)
         addLog("${tag}▶ PRESS $name mask=0x${"%04X".format(s.buttons)} ${GamepadReportBuilder.describeBytes(s)} hex=[${GamepadReportBuilder.toHexString(report)}]")
         sendForced("${tag}PRESS $name")
     }
@@ -613,7 +614,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
         val s = _gamepadState.value
         val name = buttonName(button)
-        addLog("${tag}■ RELEASE $name mask=0x${"%04X".format(s.buttons)} hex=[${GamepadReportBuilder.toHexString(GamepadReportBuilder.buildReport(s))}]")
+        addLog("${tag}■ RELEASE $name mask=0x${"%04X".format(s.buttons)} hex=[${GamepadReportBuilder.toHexString(GamepadReportBuilder.buildReport(s, isPsProfile))}]")
         sendForced("${tag}RELEASE $name")
     }
 
@@ -797,7 +798,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     private fun sendThrottled() {
         if (!_isConnected.value) return
-        val report = GamepadReportBuilder.buildReport(_gamepadState.value)
+        val report = GamepadReportBuilder.buildReport(_gamepadState.value, isPsProfile)
         val sent = hidManager.sendReport(report, force = false)
         if (sent) _reportsSent.value = hidManager.sendCount
     }
@@ -807,7 +808,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             addLog("  -- NOT CONNECTED ($context)")
             return
         }
-        val report = GamepadReportBuilder.buildReport(_gamepadState.value)
+        val report = GamepadReportBuilder.buildReport(_gamepadState.value, isPsProfile)
         val sent = hidManager.sendReport(report, force = true)
         _reportsSent.value = hidManager.sendCount
         if (sent) {
@@ -819,7 +820,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     fun sendNeutralReport() {
         _gamepadState.value = _gamepadState.value.neutral()
-        val report = GamepadReportBuilder.neutralReport()
+        val report = GamepadReportBuilder.neutralReport(isPsProfile)
         addLog("NEUTRAL hex=[${GamepadReportBuilder.toHexString(report)}] | ${hidManager.statsString()}")
         if (!_isConnected.value) { addLog("Not connected"); return }
         val sent = hidManager.sendReport(report, force = true)

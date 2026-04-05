@@ -27,6 +27,8 @@ class BluetoothHidManager(private val context: Context) {
     private var _isConnected = false
     val isConnected: Boolean get() = _isConnected
 
+    var psProfile: Boolean = false
+
     // ── Rate limiting ────────────────────────────────────────────────────
     private var lastSentReport: ByteArray? = null
     private var lastSendTimeNs: Long = 0
@@ -151,7 +153,7 @@ class BluetoothHidManager(private val context: Context) {
 
         override fun onGetReport(device: BluetoothDevice?, type: Byte, id: Byte, bufferSize: Int) {
             listener?.onLog("CB_GET_REPORT: type=$type id=$id size=$bufferSize device=${device?.name}")
-            val report = lastSentReport?.copyOf() ?: GamepadReportBuilder.neutralReport()
+            val report = lastSentReport?.copyOf() ?: GamepadReportBuilder.neutralReport(psProfile)
             hidDevice?.replyReport(device, type, id, report)
         }
 
@@ -238,6 +240,7 @@ class BluetoothHidManager(private val context: Context) {
             "REGISTER_PRE: reason=$reason profile=$profile thread=${Thread.currentThread().name} | ${stateSnapshot()}"
         )
 
+        psProfile = profile == "playstation"
         val descriptor = HidDescriptor.descriptorForProfile(profile)
         val sdpSettings = BluetoothHidDeviceAppSdpSettings(
             "Superior Controller",
