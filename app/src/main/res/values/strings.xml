@@ -26,7 +26,12 @@
     <string name="devices_empty">No devices available. Use Discoverable to let a PC find you.</string>
     <string name="devices_connect">Connect</string>
     <string name="devices_remove">Remove</string>
+    <string name="devices_rename">Rename</string>
+    <string name="devices_alias_hint">Device alias</string>
     <string name="devices_connected_label">Connected</string>
+    <string name="status_not_connected">Not connected</string>
+    <string name="status_no_host">No host ▸</string>
+    <string name="status_hw_controller">Controller</string>
 
     <!-- Gamepad controls -->
     <string name="btn_send_neutral">Neutral</string>

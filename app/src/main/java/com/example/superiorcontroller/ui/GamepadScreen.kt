@@ -1,12 +1,12 @@
 package com.example.superiorcontroller.ui
 
-import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -30,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -41,6 +43,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.superiorcontroller.R
@@ -60,7 +64,6 @@ import com.example.superiorcontroller.ui.components.PlaybackBar
 import com.example.superiorcontroller.ui.components.RecordControls
 import com.example.superiorcontroller.ui.components.RecordingsSheet
 import com.example.superiorcontroller.ui.components.SettingsSheet
-import com.example.superiorcontroller.ui.components.StatusPanel
 import com.example.superiorcontroller.ui.components.StickClickRow
 import com.example.superiorcontroller.ui.components.TriggerRow
 import com.example.superiorcontroller.ui.components.VirtualJoystick
@@ -73,12 +76,6 @@ fun GamepadScreen(
     onRequestPermissions: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bluetoothAvailable by viewModel.bluetoothAvailable.collectAsState()
-    val proxyReady by viewModel.proxyReady.collectAsState()
-    val isRegistered by viewModel.isRegistered.collectAsState()
-    val isConnected by viewModel.isConnected.collectAsState()
-    val connectedDevice by viewModel.connectedDeviceName.collectAsState()
-    val reportsSent by viewModel.reportsSent.collectAsState()
     val logMessages by viewModel.logMessages.collectAsState()
 
     val discoverableLauncher = rememberLauncherForActivityResult(
@@ -107,7 +104,6 @@ fun GamepadScreen(
     val onLeftTrigger: (Float) -> Unit = { viewModel.setLeftTrigger(it) }
     val onRightTrigger: (Float) -> Unit = { viewModel.setRightTrigger(it) }
 
-    // Derive visual-feedback values from the live gamepad state
     val gs by viewModel.gamepadState.collectAsState()
     val gsButtons = gs.buttons or gs.dpad
     val gsLeftX = (gs.leftX - AxisDefaults.CENTER.toFloat()) / AxisDefaults.CENTER
@@ -117,7 +113,6 @@ fun GamepadScreen(
     val gsLT = gs.leftTrigger.toFloat() / TriggerDefaults.MAX
     val gsRT = gs.rightTrigger.toFloat() / TriggerDefaults.MAX
 
-    // Recording / Playback state
     val isRecording by viewModel.isRecording.collectAsState()
     val recordingElapsedMs by viewModel.recordingElapsedMs.collectAsState()
     val recordings by viewModel.recordings.collectAsState()
@@ -132,12 +127,6 @@ fun GamepadScreen(
                 permissionsGranted = permissionsGranted,
                 onRequestPermissions = onRequestPermissions,
                 onMakeDiscoverable = onMakeDiscoverable,
-                bluetoothAvailable = bluetoothAvailable,
-                proxyReady = proxyReady,
-                isRegistered = isRegistered,
-                isConnected = isConnected,
-                connectedDevice = connectedDevice,
-                reportsSent = reportsSent,
                 logMessages = logMessages,
                 onPress = onPress,
                 onRelease = onRelease,
@@ -156,12 +145,6 @@ fun GamepadScreen(
                 permissionsGranted = permissionsGranted,
                 onRequestPermissions = onRequestPermissions,
                 onMakeDiscoverable = onMakeDiscoverable,
-                bluetoothAvailable = bluetoothAvailable,
-                proxyReady = proxyReady,
-                isRegistered = isRegistered,
-                isConnected = isConnected,
-                connectedDevice = connectedDevice,
-                reportsSent = reportsSent,
                 logMessages = logMessages,
                 onPress = onPress,
                 onRelease = onRelease,
@@ -176,7 +159,6 @@ fun GamepadScreen(
             )
         }
 
-        // Playback bar overlay (bottom center, above FABs)
         if (playbackProgress.status != PlaybackStatus.IDLE) {
             PlaybackBar(
                 progress = playbackProgress,
@@ -189,7 +171,6 @@ fun GamepadScreen(
             )
         }
 
-        // Record controls (bottom-start)
         RecordControls(
             isRecording = isRecording,
             elapsedMs = recordingElapsedMs,
@@ -201,7 +182,6 @@ fun GamepadScreen(
                 .padding(16.dp)
         )
 
-        // Settings FAB (bottom-end)
         SmallFloatingActionButton(
             onClick = { showSettings = true },
             modifier = Modifier
@@ -217,7 +197,6 @@ fun GamepadScreen(
         }
     }
 
-    // Settings sheet
     if (showSettings) {
         SettingsSheet(
             hapticsEnabled = hapticsEnabled,
@@ -232,7 +211,6 @@ fun GamepadScreen(
         )
     }
 
-    // Recordings sheet
     if (showRecordings) {
         RecordingsSheet(
             recordings = recordings,
@@ -256,12 +234,6 @@ private fun PortraitLayout(
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
     onMakeDiscoverable: () -> Unit,
-    bluetoothAvailable: Boolean,
-    proxyReady: Boolean,
-    isRegistered: Boolean,
-    isConnected: Boolean,
-    connectedDevice: String?,
-    reportsSent: Long,
     logMessages: List<String>,
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
@@ -281,24 +253,10 @@ private fun PortraitLayout(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        StatusPanel(
-            bluetoothAvailable = bluetoothAvailable,
-            isRegistered = isRegistered,
-            isConnected = isConnected,
-            connectedDeviceName = connectedDevice,
-            reportsSent = reportsSent
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        ConnectionButtons(
+        BluetoothBar(
             viewModel = viewModel,
             permissionsGranted = permissionsGranted,
             onRequestPermissions = onRequestPermissions,
-            bluetoothAvailable = bluetoothAvailable,
-            proxyReady = proxyReady,
-            isRegistered = isRegistered,
-            isConnected = isConnected,
             onMakeDiscoverable = onMakeDiscoverable,
             modifier = Modifier.fillMaxWidth()
         )
@@ -384,12 +342,6 @@ private fun LandscapeLayout(
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
     onMakeDiscoverable: () -> Unit,
-    bluetoothAvailable: Boolean,
-    proxyReady: Boolean,
-    isRegistered: Boolean,
-    isConnected: Boolean,
-    connectedDevice: String?,
-    reportsSent: Long,
     logMessages: List<String>,
     onPress: (Int) -> Unit,
     onRelease: (Int) -> Unit,
@@ -412,18 +364,15 @@ private fun LandscapeLayout(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            CompactStatusDots(bluetoothAvailable, isRegistered, isConnected, connectedDevice, reportsSent)
-
-            ConnectionButtons(
+            BluetoothBar(
                 viewModel = viewModel,
                 permissionsGranted = permissionsGranted,
                 onRequestPermissions = onRequestPermissions,
-                bluetoothAvailable = bluetoothAvailable,
-                proxyReady = proxyReady,
-                isRegistered = isRegistered,
-                isConnected = isConnected,
-                onMakeDiscoverable = onMakeDiscoverable
+                onMakeDiscoverable = onMakeDiscoverable,
+                modifier = Modifier.weight(1f)
             )
+
+            Spacer(Modifier.width(6.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Button(
@@ -520,57 +469,36 @@ private fun LandscapeLayout(
     }
 }
 
-// ── Shared composables ──────────────────────────────────────────────────────
+// ── Bluetooth status bar ────────────────────────────────────────────────────
 
 @Composable
-private fun CompactStatusDots(
-    bt: Boolean,
-    reg: Boolean,
-    conn: Boolean,
-    deviceName: String?,
-    reports: Long
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        val green = Color(0xFF4CAF50)
-        val red = Color(0xFFB71C1C)
-        StatusDot(bt, green, red)
-        Spacer(Modifier.width(4.dp))
-        StatusDot(reg, green, red)
-        Spacer(Modifier.width(4.dp))
-        StatusDot(conn, green, red)
-        Spacer(Modifier.width(6.dp))
-        val info = buildString {
-            if (conn && deviceName != null) append(deviceName).append(" | ")
-            append(reports)
-        }
-        Text(info, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun StatusDot(active: Boolean, activeColor: Color, inactiveColor: Color) {
-    val color by animateColorAsState(if (active) activeColor else inactiveColor, label = "dot")
-    Box(Modifier.size(8.dp).background(color, CircleShape))
-}
-
-@Composable
-private fun ConnectionButtons(
+private fun BluetoothBar(
     viewModel: GamepadViewModel,
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
-    bluetoothAvailable: Boolean,
-    proxyReady: Boolean,
-    isRegistered: Boolean,
-    isConnected: Boolean,
     onMakeDiscoverable: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val bluetoothAvailable by viewModel.bluetoothAvailable.collectAsState()
+    val proxyReady by viewModel.proxyReady.collectAsState()
+    val isRegistered by viewModel.isRegistered.collectAsState()
+    val isConnected by viewModel.isConnected.collectAsState()
+    val connectedDevice by viewModel.connectedDeviceName.collectAsState()
+    val connectedAddress by viewModel.connectedHostAddress.collectAsState()
+    val reportsSent by viewModel.reportsSent.collectAsState()
     val knownDevices by viewModel.knownDevices.collectAsState()
     val bondedDevices by viewModel.bondedDeviceInfo.collectAsState()
-    val lastKnown = knownDevices.firstOrNull()
+    val hwConnected by viewModel.hwConnected.collectAsState()
+    val hwDeviceName by viewModel.hwDeviceName.collectAsState()
+
     var showDeviceSelector by remember { mutableStateOf(false) }
 
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // ── Pre-registration: show setup buttons ─────────────────
         if (!permissionsGranted) {
             Button(onClick = onRequestPermissions) {
                 Text(stringResource(R.string.btn_grant_permissions), fontSize = 11.sp)
@@ -581,66 +509,167 @@ private fun ConnectionButtons(
             Button(onClick = { viewModel.initializeBluetooth() }) {
                 Text(stringResource(R.string.btn_initialize_bt), fontSize = 11.sp)
             }
+            return@Row
         }
         if (bluetoothAvailable && proxyReady && !isRegistered) {
+            StatusDots(bt = true, hid = false)
             Button(
                 onClick = { viewModel.registerHidApp() },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
             ) { Text(stringResource(R.string.btn_register_hid), fontSize = 11.sp) }
+            return@Row
         }
-        if (isRegistered && !isConnected) {
-            if (lastKnown != null) {
-                Button(
-                    onClick = { viewModel.connectToKnownDevice(lastKnown.address) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
-                ) {
-                    Text(
-                        "↻ ${lastKnown.name}",
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
+
+        // ── Post-registration: status dots + chips ───────────────
+        if (isRegistered) {
+            StatusDots(bt = true, hid = true)
+
+            HostChip(
+                isConnected = isConnected,
+                deviceName = connectedDevice,
+                onClick = {
+                    viewModel.refreshBondedDevices()
+                    showDeviceSelector = true
+                }
+            )
+
+            if (!isConnected) {
+                val lastKnown = knownDevices.firstOrNull()
+                if (lastKnown != null) {
+                    Button(
+                        onClick = { viewModel.switchToDevice(lastKnown.address) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
+                    ) {
+                        Text(
+                            "↻ ${lastKnown.displayName}",
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
-            OutlinedButton(onClick = {
-                viewModel.refreshBondedDevices()
-                showDeviceSelector = true
-            }) {
-                Text(stringResource(R.string.btn_devices), fontSize = 11.sp)
-            }
-            Button(
-                onClick = onMakeDiscoverable,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
-            ) { Text(stringResource(R.string.btn_discoverable), fontSize = 11.sp) }
-        }
-        if (isConnected) {
-            Button(
-                onClick = { viewModel.disconnectFromHost() },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
-            ) { Text(stringResource(R.string.btn_disconnect), fontSize = 11.sp) }
-        }
-        if (isRegistered) {
-            OutlinedButton(onClick = { viewModel.unregisterHidApp() }) {
-                Text(stringResource(R.string.btn_unregister), fontSize = 11.sp)
-            }
+
+            HwControllerChip(connected = hwConnected, deviceName = hwDeviceName)
+
+            Text(
+                text = "#$reportsSent",
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 
     if (showDeviceSelector) {
         DeviceSelectorSheet(
+            isConnected = isConnected,
+            isRegistered = isRegistered,
+            connectedAddress = connectedAddress,
+            connectedDeviceName = connectedDevice,
             knownDevices = knownDevices,
             bondedDevices = bondedDevices,
-            connectedAddress = null,
             onConnect = { address ->
-                viewModel.connectToKnownDevice(address)
+                viewModel.switchToDevice(address)
                 showDeviceSelector = false
             },
+            onDisconnect = {
+                viewModel.disconnectFromHost()
+            },
             onRemoveKnown = { viewModel.removeKnownDevice(it) },
+            onRenameKnown = { address, alias -> viewModel.renameKnownDevice(address, alias) },
             onMakeDiscoverable = {
                 onMakeDiscoverable()
                 showDeviceSelector = false
             },
+            onUnregister = {
+                viewModel.unregisterHidApp()
+                showDeviceSelector = false
+            },
             onDismiss = { showDeviceSelector = false }
         )
+    }
+}
+
+// ── Sub-components ──────────────────────────────────────────────────────────
+
+@Composable
+private fun StatusDots(bt: Boolean, hid: Boolean) {
+    val green = Color(0xFF4CAF50)
+    val red = Color(0xFFB71C1C)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        StatusDot(active = bt, activeColor = green, inactiveColor = red)
+        Spacer(Modifier.width(3.dp))
+        StatusDot(active = hid, activeColor = green, inactiveColor = red)
+    }
+}
+
+@Composable
+private fun StatusDot(active: Boolean, activeColor: Color, inactiveColor: Color) {
+    val color by animateColorAsState(if (active) activeColor else inactiveColor, label = "dot")
+    Box(Modifier.size(8.dp).background(color, CircleShape))
+}
+
+@Composable
+private fun HostChip(
+    isConnected: Boolean,
+    deviceName: String?,
+    onClick: () -> Unit
+) {
+    val bgColor = if (isConnected)
+        Color(0xFF4CAF50).copy(alpha = 0.15f)
+    else
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    val dotColor = if (isConnected) Color(0xFF4CAF50) else Color(0xFFB71C1C)
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = bgColor,
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(7.dp).background(dotColor, CircleShape))
+            Spacer(Modifier.width(5.dp))
+            Text(
+                text = if (isConnected && deviceName != null) deviceName
+                       else stringResource(R.string.status_no_host),
+                fontSize = 11.sp,
+                fontWeight = if (isConnected) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.width(3.dp))
+            Text("▾", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun HwControllerChip(connected: Boolean, deviceName: String?) {
+    if (!connected) return
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Color(0xFF2196F3).copy(alpha = 0.12f),
+        tonalElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("🎮", fontSize = 10.sp)
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = deviceName?.take(16) ?: stringResource(R.string.status_hw_controller),
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = Color(0xFF1565C0)
+            )
+        }
     }
 }

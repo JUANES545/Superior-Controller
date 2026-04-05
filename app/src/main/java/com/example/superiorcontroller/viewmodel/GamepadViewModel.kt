@@ -64,6 +64,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _connectedDeviceName = MutableStateFlow<String?>(null)
     val connectedDeviceName: StateFlow<String?> = _connectedDeviceName.asStateFlow()
 
+    private val _connectedHostAddress = MutableStateFlow<String?>(null)
+    val connectedHostAddress: StateFlow<String?> = _connectedHostAddress.asStateFlow()
+
     private val _logMessages = MutableStateFlow<List<String>>(emptyList())
     val logMessages: StateFlow<List<String>> = _logMessages.asStateFlow()
 
@@ -93,7 +96,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     val bondedDeviceInfo: StateFlow<List<Pair<String, String>>> = _bondedDeviceInfo.asStateFlow()
 
     private var userDisconnected = false
-    private var pendingRecovery = false
+    private var pendingConnectAfterRegister: String? = null
 
     // ── Hardware controller ─────────────────────────────────────────────
 
@@ -132,38 +135,73 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     private var recordingTimerJob: Job? = null
 
+    // ── Lifecycle state (for diagnostic logging) ──────────────────────
+    var currentLifecycleState: String = "INIT"
+
+    fun diagnosticState(): String =
+        "lifecycle=$currentLifecycleState bt=${_bluetoothAvailable.value} " +
+        "proxy=${_proxyReady.value} reg=${_isRegistered.value} " +
+        "conn=${_isConnected.value} host=${_connectedDeviceName.value} " +
+        "hostAddr=${_connectedHostAddress.value} " +
+        "hw=${_hwConnected.value} hwName=${_hwDeviceName.value} " +
+        "| mgr: ${hidManager.stateSnapshot()}"
+
     // ── Listeners ───────────────────────────────────────────────────────
 
     @SuppressLint("MissingPermission")
     private val managerListener = object : BluetoothHidManager.Listener {
         override fun onProxyReady() {
             _proxyReady.value = true
-            if (pendingRecovery) {
-                pendingRecovery = false
-                recoverConnection()
-            }
+            addLog(
+                "PROXY_READY: acquired (NO auto-register — lazy mode). " +
+                "reg=${hidManager.isRegistered} | ${diagnosticState()}"
+            )
         }
         override fun onRegistrationChanged(registered: Boolean) {
+            val prev = _isRegistered.value
             _isRegistered.value = registered
-            if (registered && pendingRecovery) {
-                pendingRecovery = false
-                recoverConnection()
+            addLog("VM_REG_CHANGED: registered=$registered prev=$prev lifecycle=$currentLifecycleState hw=${_hwConnected.value}")
+
+            if (registered) {
+                val pending = pendingConnectAfterRegister
+                if (pending != null) {
+                    pendingConnectAfterRegister = null
+                    addLog("LAZY_CONNECT: registration confirmed → connecting to $pending")
+                    hidManager.switchToHost(pending)
+                }
+            } else {
+                if (pendingConnectAfterRegister != null) {
+                    addLog("LAZY_CONNECT_CANCELLED: registration lost, clearing pending=$pendingConnectAfterRegister")
+                    pendingConnectAfterRegister = null
+                }
             }
         }
         override fun onConnectionChanged(device: BluetoothDevice?, connected: Boolean) {
+            val prevConn = _isConnected.value
             _isConnected.value = connected
-            _connectedDeviceName.value = device?.name ?: device?.address
+            _connectedHostAddress.value = if (connected) device?.address else null
+            addLog(
+                "VM_CONN_CHANGED: connected=$connected prev=$prevConn " +
+                "device=${device?.name}/${device?.address} lifecycle=$currentLifecycleState"
+            )
             if (connected && device != null) {
                 userDisconnected = false
+                val address = device.address ?: ""
+                val btName = device.name ?: address
                 val kd = KnownDevice(
-                    name = device.name ?: device.address ?: "Unknown",
-                    address = device.address ?: "",
+                    name = btName,
+                    address = address,
                     lastUsedAt = System.currentTimeMillis()
                 )
                 viewModelScope.launch(Dispatchers.IO) {
                     knownDevicesRepo.save(kd)
-                    _knownDevices.value = knownDevicesRepo.loadAll()
+                    val refreshed = knownDevicesRepo.loadAll()
+                    _knownDevices.value = refreshed
+                    val saved = refreshed.find { it.address == address }
+                    _connectedDeviceName.value = saved?.displayName ?: btName
                 }
+            } else {
+                _connectedDeviceName.value = null
             }
         }
         override fun onLog(message: String) { addLog(message) }
@@ -191,12 +229,20 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         override fun onHwDeviceConnected(name: String, vendorId: Int, productId: Int) {
             _hwConnected.value = true
             _hwDeviceName.value = name
-            addLog("GAMEPAD_CONNECTED: $name (VID:${"%04X".format(vendorId)} PID:${"%04X".format(productId)})")
+            addLog(
+                "GAMEPAD_CONNECTED: $name (VID:${"%04X".format(vendorId)} PID:${"%04X".format(productId)}) " +
+                "lifecycle=$currentLifecycleState reg=${_isRegistered.value} conn=${_isConnected.value}"
+            )
         }
         override fun onHwDeviceDisconnected(name: String) {
+            val prevName = _hwDeviceName.value
             _hwConnected.value = false
             _hwDeviceName.value = null
-            addLog("GAMEPAD_DISCONNECTED: $name")
+            addLog(
+                "GAMEPAD_DISCONNECTED: $name (was=$prevName) " +
+                "lifecycle=$currentLifecycleState reg=${_isRegistered.value} conn=${_isConnected.value} " +
+                "| mgr: ${hidManager.stateSnapshot()}"
+            )
         }
     }
 
@@ -290,32 +336,61 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     // ── Lifecycle / Connection management ───────────────────────────────
 
     fun initializeBluetooth() {
-        val result = hidManager.initialize()
+        addLog("INIT_BT: called lifecycle=$currentLifecycleState")
+        val result = hidManager.initialize(reason = "APP_INIT")
         _bluetoothAvailable.value = hidManager.isBluetoothAvailable() && hidManager.isBluetoothEnabled()
-        if (!result) addLog("Bluetooth initialization failed")
+        if (!result) addLog("INIT_BT_FAIL: initialization failed | ${diagnosticState()}")
     }
 
     fun registerHidApp() {
-        if (!hidManager.isProxyReady()) { addLog("Proxy not ready"); return }
-        hidManager.registerApp()
+        if (!hidManager.isProxyReady()) { addLog("MANUAL_REGISTER_FAIL: proxy not ready"); return }
+        addLog("MANUAL_REGISTER: user requested (hw=${_hwConnected.value}) | ${diagnosticState()}")
+        hidManager.registerApp(reason = "USER_MANUAL_REGISTER")
     }
 
-    fun unregisterHidApp() { hidManager.unregisterApp() }
+    fun unregisterHidApp() {
+        addLog("MANUAL_UNREGISTER: user requested | ${diagnosticState()}")
+        hidManager.unregisterApp(reason = "USER_MANUAL_UNREGISTER")
+    }
+
     fun getBondedDevices(): List<BluetoothDevice> = hidManager.getBondedDevices()
-    fun connectToDevice(device: BluetoothDevice) { hidManager.connectToHost(device) }
+    fun connectToDevice(device: BluetoothDevice) {
+        hidManager.connectToHost(device, reason = "USER_CONNECT_DEVICE")
+    }
 
     fun disconnectFromHost() {
         userDisconnected = true
-        hidManager.disconnect()
-        addLog("BT_DISCONNECT: user requested")
+        addLog("USER_DISCONNECT: requested | ${diagnosticState()}")
+        hidManager.disconnect(reason = "USER_DISCONNECT")
     }
 
     fun connectToKnownDevice(address: String) {
         userDisconnected = false
-        if (!hidManager.isProxyReady()) { addLog("Proxy not ready for connect"); return }
-        if (!hidManager.isRegistered) { addLog("Not registered, cannot connect"); return }
-        if (hidManager.isConnected) { addLog("Already connected"); return }
-        hidManager.connectToAddress(address)
+        if (!hidManager.isProxyReady()) { addLog("KNOWN_CONNECT_FAIL: proxy not ready"); return }
+        if (hidManager.isConnected) { addLog("KNOWN_CONNECT_SKIP: already connected"); return }
+        if (!hidManager.isRegistered) {
+            addLog("KNOWN_CONNECT_LAZY: not registered — registering first for $address")
+            pendingConnectAfterRegister = address
+            hidManager.registerApp(reason = "LAZY_REGISTER_FOR_KNOWN_CONNECT")
+            return
+        }
+        hidManager.connectToAddress(address, reason = "USER_CONNECT_KNOWN")
+    }
+
+    fun switchToDevice(address: String) {
+        userDisconnected = false
+        if (!hidManager.isProxyReady()) { addLog("SWITCH_FAIL: proxy not ready"); return }
+        if (!hidManager.isRegistered) {
+            addLog(
+                "SWITCH_LAZY: not registered — registering first, then connecting to $address " +
+                "(reason=LAZY_REGISTER_FOR_CONNECT) hw=${_hwConnected.value}"
+            )
+            pendingConnectAfterRegister = address
+            hidManager.registerApp(reason = "LAZY_REGISTER_FOR_CONNECT")
+            return
+        }
+        addLog("BT_SWITCH: requesting switch to $address | ${diagnosticState()}")
+        hidManager.switchToHost(address)
     }
 
     fun removeKnownDevice(address: String) {
@@ -325,57 +400,58 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun renameKnownDevice(address: String, alias: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            knownDevicesRepo.rename(address, alias)
+            _knownDevices.value = knownDevicesRepo.loadAll()
+            if (_connectedHostAddress.value == address) {
+                val device = _knownDevices.value.find { it.address == address }
+                _connectedDeviceName.value = device?.displayName
+            }
+        }
+    }
+
     fun refreshBondedDevices() {
-        _bondedDeviceInfo.value = hidManager.getBondedDeviceInfo()
+        _bondedDeviceInfo.value = hidManager.getHostCandidates()
     }
 
     /**
-     * Called from Activity.onResume. Syncs actual BT state with ViewModel
-     * and auto-recovers the connection chain if it was lost while in background.
+     * Called from Activity.onResume. Syncs ViewModel StateFlows with the real
+     * BluetoothHidManager state. If the proxy was lost, re-acquires it.
+     * Never auto-registers or auto-connects — fully passive to avoid
+     * disrupting external BT devices (e.g. Xbox controller).
      */
     fun recoverConnection() {
-        val btOk = hidManager.isBluetoothAvailable() && hidManager.isBluetoothEnabled()
-        _bluetoothAvailable.value = btOk
+        val btAvailable = hidManager.isBluetoothAvailable() && hidManager.isBluetoothEnabled()
+        val prevBt = _bluetoothAvailable.value
+        val prevProxy = _proxyReady.value
+        val prevReg = _isRegistered.value
+        val prevConn = _isConnected.value
 
-        if (!btOk) {
-            addLog("BT_RESUME: Bluetooth not available — reinitializing")
-            pendingRecovery = !userDisconnected
-            hidManager.initialize()
-            return
-        }
-
-        if (!hidManager.isProxyReady()) {
-            addLog("BT_RESUME: proxy lost — reinitializing")
-            pendingRecovery = !userDisconnected
-            hidManager.initialize()
-            return
-        }
-        _proxyReady.value = true
-
-        if (!hidManager.isRegistered) {
-            addLog("BT_RESUME: registration lost — re-registering")
-            pendingRecovery = !userDisconnected
-            registerHidApp()
-            return
-        }
-        _isRegistered.value = true
-
+        _bluetoothAvailable.value = btAvailable
+        _proxyReady.value = hidManager.isProxyReady()
+        _isRegistered.value = hidManager.isRegistered
         _isConnected.value = hidManager.isConnected
-        if (hidManager.isConnected) {
-            addLog("BT_RESUME: still connected")
-            return
-        }
 
-        if (!userDisconnected) {
-            val lastDevice = knownDevicesRepo.getLastUsed()
-            if (lastDevice != null) {
-                addLog("BT_RESUME: reconnecting to ${lastDevice.name}")
-                connectToKnownDevice(lastDevice.address)
-            } else {
-                addLog("BT_RESUME: registered, no known device to reconnect")
-            }
+        addLog(
+            "RECOVER: prevBt=$prevBt→$btAvailable prevProxy=$prevProxy→${hidManager.isProxyReady()} " +
+            "prevReg=$prevReg→${hidManager.isRegistered} prevConn=$prevConn→${hidManager.isConnected} " +
+            "hw=${_hwConnected.value} | mgr: ${hidManager.stateSnapshot()}"
+        )
+
+        if (!btAvailable || !hidManager.isProxyReady()) {
+            addLog("RECOVER_ACTION: reinitializing proxy (reason=ACTIVITY_RESUME_NO_PROXY)")
+            hidManager.initialize(reason = "ACTIVITY_RESUME_NO_PROXY")
+        } else if (!hidManager.isRegistered && prevReg) {
+            addLog(
+                "RECOVER_INFO: registration was lost during background (AOSP HidDeviceService " +
+                "auto-unregisters when process importance drops). NOT re-registering to preserve " +
+                "external BT connections. User must re-register manually or connect to a host."
+            )
+            _connectedDeviceName.value = null
+            _connectedHostAddress.value = null
         } else {
-            addLog("BT_RESUME: user-disconnected, not reconnecting")
+            addLog("RECOVER_ACTION: state synced — no action needed")
         }
     }
 
@@ -672,10 +748,11 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
 
     override fun onCleared() {
+        addLog("VM_ON_CLEARED: | ${diagnosticState()}")
         super.onCleared()
         playbackEngine.stop()
         hwManager.unregister()
         ButtonSoundPlayer.release()
-        hidManager.cleanup()
+        hidManager.cleanup(reason = "VIEWMODEL_CLEARED")
     }
 }

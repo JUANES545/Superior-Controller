@@ -2,8 +2,10 @@ package com.example.superiorcontroller
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
@@ -31,8 +33,15 @@ class MainActivity : ComponentActivity() {
     private val gamepadViewModel: GamepadViewModel by viewModels()
     private var hasResumedOnce = false
 
+    private fun logLifecycle(event: String) {
+        val state = gamepadViewModel.diagnosticState()
+        Log.d("GamepadDebug", "LIFECYCLE: $event | $state")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        gamepadViewModel.currentLifecycleState = "CREATED"
+        logLifecycle("onCreate (savedState=${savedInstanceState != null})")
         enableEdgeToEdge()
 
         setContent {
@@ -62,12 +71,49 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        gamepadViewModel.currentLifecycleState = "STARTED"
+        logLifecycle("onStart")
+    }
+
     override fun onResume() {
         super.onResume()
+        gamepadViewModel.currentLifecycleState = "RESUMED"
+        logLifecycle("onResume (hasResumedOnce=$hasResumedOnce)")
         if (hasResumedOnce && hasBluetoothPermissions()) {
             gamepadViewModel.recoverConnection()
         }
         hasResumedOnce = true
+    }
+
+    override fun onPause() {
+        gamepadViewModel.currentLifecycleState = "PAUSED"
+        logLifecycle("onPause")
+        super.onPause()
+    }
+
+    override fun onStop() {
+        gamepadViewModel.currentLifecycleState = "STOPPED"
+        logLifecycle("onStop")
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        gamepadViewModel.currentLifecycleState = "DESTROYED"
+        logLifecycle("onDestroy (isFinishing=$isFinishing)")
+        super.onDestroy()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        Log.d("GamepadDebug",
+            "CONFIG_CHANGED: keyboard=${newConfig.keyboard} " +
+            "keyboardHidden=${newConfig.keyboardHidden} " +
+            "navigation=${newConfig.navigation} " +
+            "orientation=${newConfig.orientation} " +
+            "uiMode=${newConfig.uiMode} | ${gamepadViewModel.diagnosticState()}"
+        )
     }
 
     // ── Hardware gamepad event capture ────────────────────────────────
