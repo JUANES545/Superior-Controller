@@ -90,6 +90,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _debugLogVisible = MutableStateFlow(false)
     val debugLogVisible: StateFlow<Boolean> = _debugLogVisible.asStateFlow()
 
+    private val _debugLogOverlay = MutableStateFlow(false)
+    val debugLogOverlay: StateFlow<Boolean> = _debugLogOverlay.asStateFlow()
+
     // ── Known devices / connection management ──────────────────────────
 
     private val _knownDevices = MutableStateFlow<List<KnownDevice>>(emptyList())
@@ -357,6 +360,11 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
                 _debugLogVisible.value = visible
             }
         }
+        viewModelScope.launch {
+            settingsRepo.debugLogOverlay.collect { overlay ->
+                _debugLogOverlay.value = overlay
+            }
+        }
         viewModelScope.launch(Dispatchers.IO) {
             _recordings.value = recordingRepo.loadAll()
         }
@@ -555,7 +563,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     // ── Button controls ─────────────────────────────────────────────────
 
     fun pressButton(button: Int, tag: String = "", hwEventTimeMs: Long = 0L) {
-        if (playbackEngine.isRunning && !tag.startsWith("[PB]")) return
+        if (playbackEngine.isPlaying && !tag.startsWith("[PB]")) return
         if (recorder.isRecording && !tag.startsWith("[PB]")) recorder.recordButtonPress(button, hwEventTimeMs)
 
         val state = _gamepadState.value
@@ -575,7 +583,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun releaseButton(button: Int, tag: String = "", hwEventTimeMs: Long = 0L) {
-        if (playbackEngine.isRunning && !tag.startsWith("[PB]")) return
+        if (playbackEngine.isPlaying && !tag.startsWith("[PB]")) return
         if (recorder.isRecording && !tag.startsWith("[PB]")) recorder.recordButtonRelease(button, hwEventTimeMs)
 
         val state = _gamepadState.value
@@ -608,7 +616,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     // ── Trigger controls ────────────────────────────────────────────────
 
     fun setLeftTrigger(normalized: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
-        if (playbackEngine.isRunning && !fromPlayback) return
+        if (playbackEngine.isPlaying && !fromPlayback) return
         if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftTrigger(normalized, hwEventTimeMs)
 
         val value = (normalized * TriggerDefaults.MAX).toInt()
@@ -623,7 +631,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setRightTrigger(normalized: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
-        if (playbackEngine.isRunning && !fromPlayback) return
+        if (playbackEngine.isPlaying && !fromPlayback) return
         if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightTrigger(normalized, hwEventTimeMs)
 
         val value = (normalized * TriggerDefaults.MAX).toInt()
@@ -640,7 +648,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     // ── Axis controls ───────────────────────────────────────────────────
 
     fun setLeftAxis(normalizedX: Float, normalizedY: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
-        if (playbackEngine.isRunning && !fromPlayback) return
+        if (playbackEngine.isPlaying && !fromPlayback) return
         if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftAxis(normalizedX, normalizedY, hwEventTimeMs)
 
         val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
@@ -650,7 +658,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setRightAxis(normalizedX: Float, normalizedY: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
-        if (playbackEngine.isRunning && !fromPlayback) return
+        if (playbackEngine.isPlaying && !fromPlayback) return
         if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightAxis(normalizedX, normalizedY, hwEventTimeMs)
 
         val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
@@ -837,6 +845,10 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     fun toggleDebugLog(visible: Boolean) {
         viewModelScope.launch { settingsRepo.setDebugLogVisible(visible) }
+    }
+
+    fun toggleDebugLogOverlay(overlay: Boolean) {
+        viewModelScope.launch { settingsRepo.setDebugLogOverlay(overlay) }
     }
 
     override fun onCleared() {

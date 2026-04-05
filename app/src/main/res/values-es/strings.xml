@@ -84,6 +84,8 @@
     <string name="settings_trigger_button">Botón</string>
     <string name="settings_debug_log_title">Log de depuración</string>
     <string name="settings_debug_log_desc">Mostrar la consola de depuración en pantalla</string>
+    <string name="settings_debug_overlay_title">Vista en capas</string>
+    <string name="settings_debug_overlay_desc">Mostrar logs detrás de los controles en vez de integrados</string>
 
     <!-- Grabación / Reproducción -->
     <string name="recordings_title">Grabaciones</string>

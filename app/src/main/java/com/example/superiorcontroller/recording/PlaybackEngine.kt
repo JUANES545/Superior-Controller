@@ -44,6 +44,7 @@ class PlaybackEngine {
     private var paused: Boolean = false
 
     val isRunning: Boolean get() = playJob?.isActive == true
+    val isPlaying: Boolean get() = isRunning && !paused
 
     fun play(data: RecordingData, scope: CoroutineScope) {
         stop()

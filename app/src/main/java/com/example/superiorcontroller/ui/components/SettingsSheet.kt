@@ -1,11 +1,14 @@
 package com.example.superiorcontroller.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -29,17 +32,23 @@ fun SettingsSheet(
     soundEnabled: Boolean,
     triggerMode: String,
     debugLogVisible: Boolean,
+    debugLogOverlay: Boolean,
     onToggleHaptics: (Boolean) -> Unit,
     onToggleSound: (Boolean) -> Unit,
     onTriggerModeChange: (String) -> Unit,
     onToggleDebugLog: (Boolean) -> Unit,
+    onToggleDebugOverlay: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
             Text(
                 text = stringResource(R.string.settings_title),
                 style = MaterialTheme.typography.titleLarge
@@ -94,6 +103,17 @@ fun SettingsSheet(
                 checked = debugLogVisible,
                 onCheckedChange = onToggleDebugLog
             )
+
+            AnimatedVisibility(visible = debugLogVisible) {
+                Column(modifier = Modifier.padding(start = 24.dp)) {
+                    SettingsToggle(
+                        title = stringResource(R.string.settings_debug_overlay_title),
+                        description = stringResource(R.string.settings_debug_overlay_desc),
+                        checked = debugLogOverlay,
+                        onCheckedChange = onToggleDebugOverlay
+                    )
+                }
+            }
 
             Spacer(Modifier.height(24.dp))
         }

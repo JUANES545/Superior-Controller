@@ -84,6 +84,8 @@
     <string name="settings_trigger_button">Button</string>
     <string name="settings_debug_log_title">Debug log</string>
     <string name="settings_debug_log_desc">Show the debug console on screen</string>
+    <string name="settings_debug_overlay_title">Layered view</string>
+    <string name="settings_debug_overlay_desc">Show logs behind the controls instead of inline</string>
 
     <!-- Recording / Playback -->
     <string name="recordings_title">Recordings</string>

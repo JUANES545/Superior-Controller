@@ -5,13 +5,20 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -30,10 +38,13 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +73,7 @@ import com.example.superiorcontroller.ui.components.DeviceSelectorSheet
 import com.example.superiorcontroller.ui.components.GamepadTrigger
 import com.example.superiorcontroller.ui.components.MenuButtons
 import com.example.superiorcontroller.ui.components.PlaybackBar
-import com.example.superiorcontroller.ui.components.RecordControls
+import com.example.superiorcontroller.ui.components.formatElapsed
 import com.example.superiorcontroller.ui.components.RecordingsSheet
 import com.example.superiorcontroller.ui.components.SettingsSheet
 import com.example.superiorcontroller.ui.components.StickClickRow
@@ -97,6 +108,7 @@ fun GamepadScreen(
     val triggerMode by viewModel.triggerMode.collectAsState()
     val triggerButtonMode = triggerMode == "button"
     val debugLogVisible by viewModel.debugLogVisible.collectAsState()
+    val debugLogOverlay by viewModel.debugLogOverlay.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
     var showRecordings by remember { mutableStateOf(false) }
@@ -122,6 +134,15 @@ fun GamepadScreen(
 
     val showBtWarning by viewModel.showBtWarning.collectAsState()
 
+    var pbWasActive by remember { mutableStateOf(false) }
+    val pbCurrentlyActive = playbackProgress.status != PlaybackStatus.IDLE
+    LaunchedEffect(pbCurrentlyActive) {
+        if (!pbCurrentlyActive && pbWasActive) {
+            showRecordings = true
+        }
+        pbWasActive = pbCurrentlyActive
+    }
+
     if (showBtWarning) {
         BtWarningDialog(
             onConfirm = { viewModel.confirmBtWarning() },
@@ -131,6 +152,28 @@ fun GamepadScreen(
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isLandscape = maxWidth > maxHeight
+
+        val overlayActive = debugLogVisible && debugLogOverlay
+        val screenHeight = maxHeight
+
+        if (overlayActive) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                DebugLog(
+                    messages = logMessages,
+                    maxHeight = if (isLandscape) screenHeight * 0.5f else screenHeight * 0.33f,
+                    minHeight = if (isLandscape) 44.dp else 160.dp,
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .then(
+                            if (isLandscape) Modifier.fillMaxWidth(0.75f)
+                            else Modifier.fillMaxWidth()
+                        )
+                )
+            }
+        }
 
         if (isLandscape) {
             LandscapeLayout(
@@ -145,6 +188,7 @@ fun GamepadScreen(
                 onRightTrigger = onRightTrigger,
                 triggerButtonMode = triggerButtonMode,
                 debugLogVisible = debugLogVisible,
+                debugLogOverlay = debugLogOverlay,
                 gsButtons = gsButtons,
                 gsLeftX = gsLeftX, gsLeftY = gsLeftY,
                 gsRightX = gsRightX, gsRightY = gsRightY,
@@ -163,6 +207,7 @@ fun GamepadScreen(
                 onRightTrigger = onRightTrigger,
                 triggerButtonMode = triggerButtonMode,
                 debugLogVisible = debugLogVisible,
+                debugLogOverlay = debugLogOverlay,
                 gsButtons = gsButtons,
                 gsLeftX = gsLeftX, gsLeftY = gsLeftY,
                 gsRightX = gsRightX, gsRightY = gsRightY,
@@ -170,36 +215,129 @@ fun GamepadScreen(
             )
         }
 
-        if (playbackProgress.status != PlaybackStatus.IDLE) {
-            PlaybackBar(
-                progress = playbackProgress,
-                onPause = { viewModel.pausePlayback() },
-                onResume = { viewModel.resumePlayback() },
-                onStop = { viewModel.stopPlayback() },
+        val pbActive = playbackProgress.status != PlaybackStatus.IDLE
+        val pbPlaying = playbackProgress.status == PlaybackStatus.PLAYING
+        val pbPaused = playbackProgress.status == PlaybackStatus.PAUSED
+        val bottomPad = if (isLandscape) 4.dp else 16.dp
+        val startPad = if (isLandscape) 16.dp else 16.dp
+        val endPad = if (isLandscape) 16.dp else 16.dp
+
+        if (pbPlaying) {
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 72.dp)
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                    }
             )
         }
 
-        RecordControls(
-            isRecording = isRecording,
-            elapsedMs = recordingElapsedMs,
-            hasRecordings = recordings.isNotEmpty(),
-            onToggleRecord = { if (isRecording) viewModel.stopRecording() else viewModel.startRecording() },
-            onOpenRecordings = { showRecordings = true },
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(16.dp)
-        )
+                .padding(start = startPad, bottom = bottomPad),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (pbActive) {
+                AnimatedVisibility(
+                    visible = pbPaused,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    FloatingActionButton(
+                        onClick = { viewModel.stopPlayback() },
+                        shape = CircleShape,
+                        containerColor = Color(0xFFD32F2F),
+                        contentColor = Color.White
+                    ) {
+                        Box(
+                            Modifier
+                                .size(18.dp)
+                                .background(Color.White, RoundedCornerShape(3.dp))
+                        )
+                    }
+                }
 
-        SmallFloatingActionButton(
+                FloatingActionButton(
+                    onClick = {
+                        if (pbPlaying) viewModel.pausePlayback()
+                        else viewModel.resumePlayback()
+                    },
+                    shape = CircleShape,
+                    containerColor = if (pbPlaying) Color(0xFFFF9800) else Color(0xFF4CAF50),
+                    contentColor = Color.White
+                ) {
+                    if (pbPlaying) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(Modifier.size(width = 4.dp, height = 18.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                            Box(Modifier.size(width = 4.dp, height = 18.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                        }
+                    } else {
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Resume", modifier = Modifier.size(28.dp))
+                    }
+                }
+
+                SmallFloatingActionButton(
+                    onClick = { showRecordings = true },
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                ) {
+                    Text("REC", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                FloatingActionButton(
+                    onClick = { if (isRecording) viewModel.stopRecording() else viewModel.startRecording() },
+                    containerColor = if (isRecording) Color(0xFFD32F2F) else Color(0xFF263238),
+                    shape = CircleShape
+                ) {
+                    if (isRecording) {
+                        Box(
+                            Modifier
+                                .size(18.dp)
+                                .background(Color.White, RoundedCornerShape(3.dp))
+                        )
+                    } else {
+                        Box(
+                            Modifier
+                                .size(18.dp)
+                                .background(Color(0xFFD32F2F), CircleShape)
+                        )
+                    }
+                }
+
+                if (isRecording) {
+                    Text(
+                        text = formatElapsed(recordingElapsedMs),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFD32F2F)
+                    )
+                }
+
+                if (recordings.isNotEmpty() && !isRecording) {
+                    SmallFloatingActionButton(
+                        onClick = { showRecordings = true },
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    ) {
+                        Text("REC", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        FloatingActionButton(
             onClick = { showSettings = true },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                .padding(end = endPad, bottom = bottomPad),
+            shape = CircleShape,
+            containerColor = Color(0xFF263238),
+            contentColor = Color.White
         ) {
             Icon(
                 Icons.Default.Settings,
@@ -214,10 +352,12 @@ fun GamepadScreen(
             soundEnabled = soundEnabled,
             triggerMode = triggerMode,
             debugLogVisible = debugLogVisible,
+            debugLogOverlay = debugLogOverlay,
             onToggleHaptics = { viewModel.toggleHaptics(it) },
             onToggleSound = { viewModel.toggleSound(it) },
             onTriggerModeChange = { viewModel.setTriggerMode(it) },
             onToggleDebugLog = { viewModel.toggleDebugLog(it) },
+            onToggleDebugOverlay = { viewModel.toggleDebugLogOverlay(it) },
             onDismiss = { showSettings = false }
         )
     }
@@ -288,6 +428,7 @@ private fun PortraitLayout(
     onRightTrigger: (Float) -> Unit,
     triggerButtonMode: Boolean,
     debugLogVisible: Boolean,
+    debugLogOverlay: Boolean,
     gsButtons: Int,
     gsLeftX: Float, gsLeftY: Float,
     gsRightX: Float, gsRightY: Float,
@@ -296,12 +437,13 @@ private fun PortraitLayout(
     val hwConnected by viewModel.hwConnected.collectAsState()
     val hwDeviceName by viewModel.hwDeviceName.collectAsState()
     val hwType by viewModel.hwConnectionType.collectAsState()
+    val overlayActive = debugLogVisible && debugLogOverlay
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .verticalScroll(rememberScrollState()),
+            .then(if (overlayActive) Modifier else Modifier.verticalScroll(rememberScrollState())),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         StatusCard(
@@ -369,26 +511,31 @@ private fun PortraitLayout(
         Spacer(Modifier.height(2.dp))
         StickClickRow(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
 
-        Spacer(Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = { viewModel.sendNeutralReport() },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F))
-            ) { Text(stringResource(R.string.btn_send_neutral), fontSize = 12.sp) }
-            OutlinedButton(
-                onClick = { viewModel.clearLog() },
-                modifier = Modifier.weight(1f)
-            ) { Text(stringResource(R.string.btn_clear_log), fontSize = 12.sp) }
-        }
-
         if (debugLogVisible) {
-            Spacer(Modifier.height(6.dp))
-            DebugLog(messages = logMessages)
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            ) {
+                val btnWidth = 120.dp
+                Button(
+                    onClick = { viewModel.sendNeutralReport() },
+                    modifier = Modifier.width(btnWidth),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
+                    contentPadding = ButtonDefaults.ContentPadding
+                ) { Text(stringResource(R.string.btn_send_neutral), fontSize = 12.sp, maxLines = 1) }
+                OutlinedButton(
+                    onClick = { viewModel.clearLog() },
+                    modifier = Modifier.width(btnWidth),
+                    contentPadding = ButtonDefaults.ContentPadding
+                ) { Text(stringResource(R.string.btn_clear_log), fontSize = 12.sp, maxLines = 1) }
+            }
+
+            if (!overlayActive) {
+                Spacer(Modifier.height(6.dp))
+                DebugLog(messages = logMessages)
+            }
         }
 
         Spacer(Modifier.height(80.dp))
@@ -410,121 +557,152 @@ private fun LandscapeLayout(
     onRightTrigger: (Float) -> Unit,
     triggerButtonMode: Boolean,
     debugLogVisible: Boolean,
+    debugLogOverlay: Boolean,
     gsButtons: Int,
     gsLeftX: Float, gsLeftY: Float,
     gsRightX: Float, gsRightY: Float,
     gsLT: Float, gsRT: Float
 ) {
-    Column(
+    val overlayActive = debugLogVisible && debugLogOverlay
+    val hwConnected by viewModel.hwConnected.collectAsState()
+    val hwDeviceName by viewModel.hwDeviceName.collectAsState()
+    val hwType by viewModel.hwConnectionType.collectAsState()
+
+    Row(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = 4.dp, vertical = 2.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            StatusCard(
-                viewModel = viewModel,
-                permissionsGranted = permissionsGranted,
-                onRequestPermissions = onRequestPermissions,
-                onMakeDiscoverable = onMakeDiscoverable,
-                modifier = Modifier.weight(1f),
-                compact = true
-            )
-
-            Spacer(Modifier.width(6.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Button(
-                    onClick = { viewModel.sendNeutralReport() },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F))
-                ) { Text(stringResource(R.string.btn_send_neutral), fontSize = 10.sp) }
-                OutlinedButton(onClick = { viewModel.clearLog() }) {
-                    Text(stringResource(R.string.btn_clear_log), fontSize = 10.sp)
-                }
-            }
-        }
-
-        Spacer(Modifier.height(2.dp))
-
-        Row(
+        // ── Left grip: LT · LB · Joystick + L3 ──
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            verticalAlignment = Alignment.CenterVertically
+                .weight(0.22f)
+                .fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.weight(0.22f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceEvenly
-            ) {
-                GamepadTrigger("LT", onValueChanged = onLeftTrigger, buttonMode = triggerButtonMode,
-                    hwValue = gsLT, width = 78.dp, height = 40.dp)
-                ControlButton("LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease,
-                    hwPressed = (gsButtons and GamepadButtons.LB) != 0, width = 78.dp, height = 32.dp, fontSize = 12)
+            GamepadTrigger("LT", onValueChanged = onLeftTrigger, buttonMode = triggerButtonMode,
+                hwValue = gsLT)
+            Spacer(Modifier.height(4.dp))
+            ControlButton("LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease,
+                hwPressed = (gsButtons and GamepadButtons.LB) != 0, width = 78.dp, height = 30.dp, fontSize = 12)
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 VirtualJoystick(
                     onAxisChanged = { x, y -> viewModel.setLeftAxis(x, y) },
-                    size = 100.dp,
+                    size = 130.dp,
                     label = stringResource(R.string.label_left_stick),
                     hwX = gsLeftX, hwY = gsLeftY
                 )
+                Spacer(Modifier.width(4.dp))
                 ControlButton("L3", GamepadButtons.L3, Color(0xFF546E7A), onPress, onRelease,
-                    hwPressed = (gsButtons and GamepadButtons.L3) != 0, width = 50.dp, height = 26.dp, fontSize = 10)
-            }
-
-            Column(
-                modifier = Modifier.weight(0.56f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    DPad(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons,
-                        btnWidth = 42.dp, btnHeight = 36.dp, offset = 38.dp)
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        MenuButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
-                    }
-                    ActionButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons,
-                        buttonSize = 46.dp, spacing = 32.dp)
-                }
-            }
-
-            Column(
-                modifier = Modifier.weight(0.22f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceEvenly
-            ) {
-                GamepadTrigger("RT", onValueChanged = onRightTrigger, buttonMode = triggerButtonMode,
-                    hwValue = gsRT, width = 78.dp, height = 40.dp)
-                ControlButton("RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease,
-                    hwPressed = (gsButtons and GamepadButtons.RB) != 0, width = 78.dp, height = 32.dp, fontSize = 12)
-                VirtualJoystick(
-                    onAxisChanged = { x, y -> viewModel.setRightAxis(x, y) },
-                    size = 100.dp,
-                    label = stringResource(R.string.label_right_stick),
-                    thumbColor = Color(0xFFFF9800),
-                    hwX = gsRightX, hwY = gsRightY
-                )
-                ControlButton("R3", GamepadButtons.R3, Color(0xFF546E7A), onPress, onRelease,
-                    hwPressed = (gsButtons and GamepadButtons.R3) != 0, width = 50.dp, height = 26.dp, fontSize = 10)
+                    hwPressed = (gsButtons and GamepadButtons.L3) != 0, width = 36.dp, height = 24.dp, fontSize = 9)
             }
         }
 
-        if (debugLogVisible) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+        // ── Center ──
+        Box(
+            modifier = Modifier
+                .weight(0.56f)
+                .fillMaxHeight()
+        ) {
+            // Top: StatusCard + input indicator (aligned top)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 4.dp)
             ) {
+                StatusCard(
+                    viewModel = viewModel,
+                    permissionsGranted = permissionsGranted,
+                    onRequestPermissions = onRequestPermissions,
+                    onMakeDiscoverable = onMakeDiscoverable,
+                    modifier = Modifier.fillMaxWidth(0.65f)
+                )
+                Spacer(Modifier.height(3.dp))
+                InputIndicator(
+                    hwConnected = hwConnected,
+                    hwDeviceName = hwDeviceName,
+                    hwType = hwType
+                )
+            }
+
+            // Bottom-aligned: DPad · Menu+Debug · ABXY
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DPad(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons,
+                        btnWidth = 40.dp, btnHeight = 34.dp, offset = 36.dp)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        MenuButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
+                        if (debugLogVisible) {
+                            Spacer(Modifier.height(4.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val btnW = 100.dp
+                                Button(
+                                    onClick = { viewModel.sendNeutralReport() },
+                                    modifier = Modifier.width(btnW).height(32.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
+                                    contentPadding = ButtonDefaults.ContentPadding
+                                ) { Text(stringResource(R.string.btn_send_neutral), fontSize = 10.sp, maxLines = 1, textAlign = TextAlign.Center) }
+                                OutlinedButton(
+                                    onClick = { viewModel.clearLog() },
+                                    modifier = Modifier.width(btnW).height(32.dp),
+                                    contentPadding = ButtonDefaults.ContentPadding
+                                ) { Text(stringResource(R.string.btn_clear_log), fontSize = 10.sp, maxLines = 1, textAlign = TextAlign.Center) }
+                            }
+                        }
+                    }
+                    ActionButtons(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons,
+                        buttonSize = 44.dp, spacing = 30.dp)
+                }
+            }
+
+            // Bottom: inline log only
+            if (debugLogVisible && !overlayActive) {
                 DebugLog(
                     messages = logMessages,
-                    maxHeight = 72.dp,
-                    minHeight = 44.dp,
-                    modifier = Modifier.fillMaxWidth(0.65f)
+                    maxHeight = 48.dp,
+                    minHeight = 28.dp,
+                    modifier = Modifier
+                        .fillMaxWidth(0.5f)
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 2.dp)
+                )
+            }
+        }
+
+        // ── Right grip: RT · RB · R3 + Joystick ──
+        Column(
+            modifier = Modifier
+                .weight(0.22f)
+                .fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            GamepadTrigger("RT", onValueChanged = onRightTrigger, buttonMode = triggerButtonMode,
+                hwValue = gsRT)
+            Spacer(Modifier.height(4.dp))
+            ControlButton("RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease,
+                hwPressed = (gsButtons and GamepadButtons.RB) != 0, width = 78.dp, height = 30.dp, fontSize = 12)
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ControlButton("R3", GamepadButtons.R3, Color(0xFF546E7A), onPress, onRelease,
+                    hwPressed = (gsButtons and GamepadButtons.R3) != 0, width = 36.dp, height = 24.dp, fontSize = 9)
+                Spacer(Modifier.width(4.dp))
+                VirtualJoystick(
+                    onAxisChanged = { x, y -> viewModel.setRightAxis(x, y) },
+                    size = 130.dp,
+                    label = stringResource(R.string.label_right_stick),
+                    thumbColor = Color(0xFFFF9800),
+                    hwX = gsRightX, hwY = gsRightY
                 )
             }
         }
@@ -893,13 +1071,28 @@ private fun FullActions(
         ) {
             OutlinedButton(
                 onClick = onOpenDevices,
-                modifier = Modifier.weight(1f)
-            ) { Text(stringResource(R.string.card_manage_devices), fontSize = 13.sp) }
+                modifier = Modifier.weight(1f),
+                contentPadding = ButtonDefaults.ContentPadding
+            ) {
+                Text(
+                    stringResource(R.string.card_manage_devices),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 16.sp
+                )
+            }
             Button(
                 onClick = { viewModel.disconnectFromHost() },
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
-            ) { Text(stringResource(R.string.btn_disconnect), fontSize = 13.sp, color = Color.White) }
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                contentPadding = ButtonDefaults.ContentPadding
+            ) {
+                Text(
+                    stringResource(R.string.btn_disconnect) + " \uD83D\uDC80",
+                    fontSize = 12.sp,
+                    color = Color.White
+                )
+            }
         }
     } else if (proxyReady) {
         Button(

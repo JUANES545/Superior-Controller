@@ -38,7 +38,7 @@ fun RecordControls(
     ) {
         FloatingActionButton(
             onClick = onToggleRecord,
-            containerColor = if (isRecording) Color(0xFFD32F2F) else MaterialTheme.colorScheme.primaryContainer,
+            containerColor = if (isRecording) Color(0xFFD32F2F) else Color(0xFF263238),
             shape = CircleShape
         ) {
             if (isRecording) {
@@ -78,7 +78,7 @@ fun RecordControls(
     }
 }
 
-private fun formatElapsed(ms: Long): String {
+internal fun formatElapsed(ms: Long): String {
     val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60

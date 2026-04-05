@@ -119,15 +119,14 @@ fun AnalogTrigger(
             .background(TRIGGER_TRACK)
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    isDragging = true
-                    animJob?.cancel()
-
                     val down = awaitFirstDown(requireUnconsumed = false).also { it.consume() }
+                    animJob?.cancel()
+                    isDragging = true
                     ButtonHaptics.performClick(context, label)
                     ButtonSoundPlayer.playClick(label)
 
                     val h = size.height.toFloat()
-                    var value = (down.position.y / h).coerceIn(0f, 1f)
+                    var value = (1f - down.position.y / h).coerceIn(0f, 1f)
                     fill = value
                     onValueChanged(value)
 
@@ -137,7 +136,7 @@ fun AnalogTrigger(
                             val pointer = event.changes.firstOrNull() ?: break
                             pointer.consume()
                             if (!pointer.pressed) break
-                            val next = (pointer.position.y / h).coerceIn(0f, 1f)
+                            val next = (1f - pointer.position.y / h).coerceIn(0f, 1f)
                             if (next != value) {
                                 value = next
                                 fill = value

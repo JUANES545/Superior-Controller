@@ -26,11 +26,21 @@ class HardwareGamepadManager(context: Context) {
     private var prevHatX = 0f
     private var prevHatY = 0f
     private val knownGamepads = mutableMapOf<Int, String>()
+    private val deviceAxisLayout = mutableMapOf<Int, AxisLayout>()
+
+    private enum class AxisLayout { STANDARD, RX_RY }
+
+    private fun resolveAxisLayout(device: InputDevice): AxisLayout {
+        val hasRxRy = device.getMotionRange(MotionEvent.AXIS_RX, InputDevice.SOURCE_JOYSTICK) != null
+                && device.getMotionRange(MotionEvent.AXIS_RY, InputDevice.SOURCE_JOYSTICK) != null
+        return if (hasRxRy) AxisLayout.RX_RY else AxisLayout.STANDARD
+    }
 
     private val deviceListener = object : InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) { checkDevice(deviceId) }
         override fun onInputDeviceChanged(deviceId: Int) { checkDevice(deviceId) }
         override fun onInputDeviceRemoved(deviceId: Int) {
+            deviceAxisLayout.remove(deviceId)
             val name = knownGamepads.remove(deviceId)
             if (name != null) listener?.onHwDeviceDisconnected(name)
         }
@@ -44,6 +54,7 @@ class HardwareGamepadManager(context: Context) {
     fun unregister() {
         inputManager.unregisterInputDeviceListener(deviceListener)
         knownGamepads.clear()
+        deviceAxisLayout.clear()
     }
 
     fun processKeyEvent(event: KeyEvent): Boolean {
@@ -82,24 +93,45 @@ class HardwareGamepadManager(context: Context) {
     }
 
     private fun dispatchAxes(event: MotionEvent, device: InputDevice, deviceId: Int, timeMs: Long) {
+        val layout = deviceAxisLayout.getOrPut(deviceId) { resolveAxisLayout(device) }
+
         val lx = applyDeadzone(axis(MotionEvent.AXIS_X, event, deviceId), device, deviceId, MotionEvent.AXIS_X)
         val ly = applyDeadzone(axis(MotionEvent.AXIS_Y, event, deviceId), device, deviceId, MotionEvent.AXIS_Y)
         listener?.onHwLeftAxis(lx, ly, timeMs)
 
-        val rx = applyDeadzone(axis(MotionEvent.AXIS_Z, event, deviceId), device, deviceId, MotionEvent.AXIS_Z)
-        val ry = applyDeadzone(axis(MotionEvent.AXIS_RZ, event, deviceId), device, deviceId, MotionEvent.AXIS_RZ)
-        listener?.onHwRightAxis(rx, ry, timeMs)
+        if (layout == AxisLayout.RX_RY) {
+            val rx = applyDeadzone(axis(MotionEvent.AXIS_RX, event, deviceId), device, deviceId, MotionEvent.AXIS_RX)
+            val ry = applyDeadzone(axis(MotionEvent.AXIS_RY, event, deviceId), device, deviceId, MotionEvent.AXIS_RY)
+            listener?.onHwRightAxis(rx, ry, timeMs)
 
-        val lt = maxOf(
-            axis(MotionEvent.AXIS_LTRIGGER, event, deviceId),
-            axis(MotionEvent.AXIS_BRAKE, event, deviceId)
-        ).coerceIn(0f, 1f)
-        val rt = maxOf(
-            axis(MotionEvent.AXIS_RTRIGGER, event, deviceId),
-            axis(MotionEvent.AXIS_GAS, event, deviceId)
-        ).coerceIn(0f, 1f)
-        listener?.onHwLeftTrigger(lt, timeMs)
-        listener?.onHwRightTrigger(rt, timeMs)
+            val lt = maxOf(
+                axis(MotionEvent.AXIS_LTRIGGER, event, deviceId),
+                axis(MotionEvent.AXIS_BRAKE, event, deviceId),
+                axis(MotionEvent.AXIS_Z, event, deviceId)
+            ).coerceIn(0f, 1f)
+            val rt = maxOf(
+                axis(MotionEvent.AXIS_RTRIGGER, event, deviceId),
+                axis(MotionEvent.AXIS_GAS, event, deviceId),
+                axis(MotionEvent.AXIS_RZ, event, deviceId)
+            ).coerceIn(0f, 1f)
+            listener?.onHwLeftTrigger(lt, timeMs)
+            listener?.onHwRightTrigger(rt, timeMs)
+        } else {
+            val rx = applyDeadzone(axis(MotionEvent.AXIS_Z, event, deviceId), device, deviceId, MotionEvent.AXIS_Z)
+            val ry = applyDeadzone(axis(MotionEvent.AXIS_RZ, event, deviceId), device, deviceId, MotionEvent.AXIS_RZ)
+            listener?.onHwRightAxis(rx, ry, timeMs)
+
+            val lt = maxOf(
+                axis(MotionEvent.AXIS_LTRIGGER, event, deviceId),
+                axis(MotionEvent.AXIS_BRAKE, event, deviceId)
+            ).coerceIn(0f, 1f)
+            val rt = maxOf(
+                axis(MotionEvent.AXIS_RTRIGGER, event, deviceId),
+                axis(MotionEvent.AXIS_GAS, event, deviceId)
+            ).coerceIn(0f, 1f)
+            listener?.onHwLeftTrigger(lt, timeMs)
+            listener?.onHwRightTrigger(rt, timeMs)
+        }
     }
 
     private fun processDpadHat(event: MotionEvent, timeMs: Long) {
