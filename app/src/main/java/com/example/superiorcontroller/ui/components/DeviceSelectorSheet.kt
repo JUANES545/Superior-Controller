@@ -8,12 +8,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -63,37 +70,53 @@ fun DeviceSelectorSheet(
                 text = stringResource(R.string.devices_title),
                 style = MaterialTheme.typography.titleLarge
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
             if (isConnected && connectedDeviceName != null) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = Color(0xFF4CAF50).copy(alpha = 0.10f),
                     shape = MaterialTheme.shapes.medium
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(connectedDeviceName, fontWeight = FontWeight.Bold)
+                            Text(
+                                connectedDeviceName,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
                             Text(
                                 stringResource(R.string.devices_connected_label),
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = Color(0xFF4CAF50),
+                                fontWeight = FontWeight.Medium
                             )
                         }
-                        OutlinedButton(onClick = onDisconnect) {
-                            Text(stringResource(R.string.btn_disconnect), fontSize = 12.sp)
+                        Button(
+                            onClick = onDisconnect,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                        ) {
+                            Text(
+                                stringResource(R.string.btn_disconnect),
+                                fontSize = 12.sp,
+                                color = Color.White
+                            )
                         }
                     }
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
             }
 
             if (knownDevices.isNotEmpty()) {
-                Text(stringResource(R.string.devices_saved), style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.devices_saved),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
                 LazyColumn(modifier = Modifier.height(200.dp)) {
                     items(knownDevices, key = { it.address }) { device ->
                         DeviceRow(
@@ -110,19 +133,27 @@ fun DeviceSelectorSheet(
             }
 
             if (bondedDevices.isNotEmpty()) {
-                Text(stringResource(R.string.devices_paired), style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.devices_paired),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
                 bondedDevices.forEach { (name, address) ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onConnect(address) }
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(name, fontSize = 14.sp)
-                            Text(address, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                address,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         TextButton(onClick = { onConnect(address) }) {
                             Text(stringResource(R.string.devices_connect))
@@ -141,11 +172,12 @@ fun DeviceSelectorSheet(
                 Spacer(Modifier.height(12.dp))
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (isRegistered) {
+            if (isRegistered) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Button(
                         onClick = onMakeDiscoverable,
                         modifier = Modifier.weight(1f),
@@ -178,13 +210,23 @@ private fun DeviceRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .let { if (!isCurrent) it.clickable(onClick = onConnect) else it }
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(name, fontSize = 14.sp, fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal)
-            Text(address, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                name,
+                fontSize = 14.sp,
+                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+            )
+            Text(
+                address,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
+
         if (editing) {
             OutlinedTextField(
                 value = alias,
@@ -198,10 +240,32 @@ private fun DeviceRow(
             }
         } else {
             if (!isCurrent) {
-                TextButton(onClick = onConnect) { Text(stringResource(R.string.devices_connect), fontSize = 12.sp) }
+                TextButton(onClick = onConnect) {
+                    Text(stringResource(R.string.devices_connect), fontSize = 12.sp)
+                }
             }
-            TextButton(onClick = { editing = true }) { Text(stringResource(R.string.devices_rename), fontSize = 12.sp) }
-            TextButton(onClick = onRemove) { Text(stringResource(R.string.devices_remove), fontSize = 12.sp, color = Color.Red) }
+            IconButton(
+                onClick = { editing = true },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = stringResource(R.string.devices_rename),
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = stringResource(R.string.devices_remove),
+                    modifier = Modifier.size(18.dp),
+                    tint = Color(0xFFD32F2F)
+                )
+            }
         }
     }
 }
