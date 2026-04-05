@@ -2,20 +2,50 @@
 <resources>
     <string name="app_name">Superior Controller</string>
 
-    <!-- Status panel -->
+    <!-- Status card -->
+    <string name="card_permissions_needed">Bluetooth permissions required</string>
+    <string name="card_bt_disabled">Bluetooth is disabled</string>
+    <string name="card_initializing">Initializing…</string>
+    <string name="card_ready">Ready</string>
+    <string name="card_hid_ready">HID mode active</string>
+    <string name="card_connected_to">Connected to %1$s</string>
+    <string name="card_connect_device">Connect to device</string>
+    <string name="card_manage_devices">Manage devices</string>
+    <string name="card_reconnect">Reconnect %1$s</string>
+    <string name="card_input_label">Input:</string>
+    <string name="card_input_virtual">Virtual controller</string>
+
+    <!-- Input indicator -->
+    <string name="input_type_bluetooth">Input: Bluetooth</string>
+    <string name="input_type_usb">Input: USB</string>
+
+    <!-- Connection steps -->
+    <string name="step_bluetooth">Bluetooth</string>
+    <string name="step_hid">HID</string>
+    <string name="step_device">Device</string>
+
+    <!-- BT warning dialog -->
+    <string name="bt_warning_title">Bluetooth controller detected</string>
+    <string name="bt_warning_body">Your current controller appears to be connected via Bluetooth.\n\nWhile the app is in HID mode, this controller will disconnect because both use the same Bluetooth channel.\n\nIf you prefer to keep using it, connect it via USB cable first.</string>
+    <string name="bt_warning_continue">Continue</string>
+
+    <!-- Legacy status panel (kept for compatibility) -->
     <string name="status_title">STATUS</string>
     <string name="status_bluetooth">Bluetooth</string>
     <string name="status_hid_reg">HID Reg.</string>
     <string name="status_host">Host</string>
     <string name="status_connected">Connected: %1$s</string>
     <string name="status_reports_sent">Reports: %1$d</string>
+    <string name="status_not_connected">Not connected</string>
+    <string name="status_no_host">No host ▸</string>
+    <string name="status_hw_controller">Controller</string>
 
     <!-- Connection buttons -->
     <string name="btn_grant_permissions">Grant Bluetooth Permissions</string>
-    <string name="btn_initialize_bt">Init BT</string>
+    <string name="btn_initialize_bt">Enable Bluetooth</string>
     <string name="btn_register_hid">Register HID</string>
-    <string name="btn_discoverable">Discoverable</string>
-    <string name="btn_unregister">Unregister</string>
+    <string name="btn_discoverable">Make discoverable</string>
+    <string name="btn_unregister">Unregister HID</string>
     <string name="btn_disconnect">Disconnect</string>
     <string name="btn_devices">Devices</string>
 
@@ -23,15 +53,12 @@
     <string name="devices_title">Devices</string>
     <string name="devices_saved">Saved Devices</string>
     <string name="devices_paired">Paired Devices</string>
-    <string name="devices_empty">No devices available. Use Discoverable to let a PC find you.</string>
+    <string name="devices_empty">No devices available. Tap \"Make discoverable\" so a device can find you.</string>
     <string name="devices_connect">Connect</string>
     <string name="devices_remove">Remove</string>
     <string name="devices_rename">Rename</string>
     <string name="devices_alias_hint">Device alias</string>
     <string name="devices_connected_label">Connected</string>
-    <string name="status_not_connected">Not connected</string>
-    <string name="status_no_host">No host ▸</string>
-    <string name="status_hw_controller">Controller</string>
 
     <!-- Gamepad controls -->
     <string name="btn_send_neutral">Neutral</string>
@@ -66,4 +93,11 @@
     <string name="recording_rename">Rename</string>
     <string name="dialog_cancel">Cancel</string>
     <string name="dialog_ok">OK</string>
+
+    <!-- Foreground service notification -->
+    <string name="notif_channel_name">HID Controller</string>
+    <string name="notif_channel_desc">Active while the app is functioning as a Bluetooth gamepad</string>
+    <string name="notif_hid_active">HID mode active</string>
+    <string name="notif_hid_ready">Ready to connect</string>
+    <string name="notif_connected_to">Connected to %1$s</string>
 </resources>

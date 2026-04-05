@@ -15,7 +15,7 @@ class SettingsRepository(context: Context) {
     private val _hapticsEnabled = MutableStateFlow(prefs.getBoolean(Keys.HAPTICS, true))
     private val _soundEnabled = MutableStateFlow(prefs.getBoolean(Keys.SOUND, true))
     private val _triggerMode = MutableStateFlow(prefs.getString(Keys.TRIGGER_MODE, MODE_ANALOG) ?: MODE_ANALOG)
-    private val _debugLogVisible = MutableStateFlow(prefs.getBoolean(Keys.DEBUG_LOG, true))
+    private val _debugLogVisible = MutableStateFlow(prefs.getBoolean(Keys.DEBUG_LOG, false))
 
     val hapticsEnabled: Flow<Boolean> = _hapticsEnabled
     val soundEnabled: Flow<Boolean> = _soundEnabled

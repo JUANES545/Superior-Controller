@@ -90,8 +90,14 @@ class HardwareGamepadManager(context: Context) {
         val ry = applyDeadzone(axis(MotionEvent.AXIS_RZ, event, deviceId), device, deviceId, MotionEvent.AXIS_RZ)
         listener?.onHwRightAxis(rx, ry, timeMs)
 
-        val lt = axis(MotionEvent.AXIS_LTRIGGER, event, deviceId).coerceIn(0f, 1f)
-        val rt = axis(MotionEvent.AXIS_RTRIGGER, event, deviceId).coerceIn(0f, 1f)
+        val lt = maxOf(
+            axis(MotionEvent.AXIS_LTRIGGER, event, deviceId),
+            axis(MotionEvent.AXIS_BRAKE, event, deviceId)
+        ).coerceIn(0f, 1f)
+        val rt = maxOf(
+            axis(MotionEvent.AXIS_RTRIGGER, event, deviceId),
+            axis(MotionEvent.AXIS_GAS, event, deviceId)
+        ).coerceIn(0f, 1f)
         listener?.onHwLeftTrigger(lt, timeMs)
         listener?.onHwRightTrigger(rt, timeMs)
     }
@@ -122,11 +128,14 @@ class HardwareGamepadManager(context: Context) {
         val device = inputManager.getInputDevice(deviceId) ?: return
         val isGamepad = device.sources and InputDevice.SOURCE_GAMEPAD != 0 ||
                 device.sources and InputDevice.SOURCE_JOYSTICK != 0
-        if (isGamepad && !knownGamepads.containsKey(deviceId)) {
-            val name = device.name
-            knownGamepads[deviceId] = name
-            listener?.onHwDeviceConnected(name, device.vendorId, device.productId)
-        }
+        if (!isGamepad || knownGamepads.containsKey(deviceId)) return
+
+        if (device.isVirtual) return
+        if (device.vendorId == 0 && device.productId == 0) return
+
+        val name = device.name
+        knownGamepads[deviceId] = name
+        listener?.onHwDeviceConnected(name, device.vendorId, device.productId)
     }
 
     private fun applyDeadzone(value: Float, device: InputDevice, deviceId: Int, axis: Int): Float {

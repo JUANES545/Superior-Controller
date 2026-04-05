@@ -25,6 +25,7 @@ import com.example.superiorcontroller.recording.PlaybackProgress
 import com.example.superiorcontroller.recording.RecordingData
 import com.example.superiorcontroller.recording.RecordingMeta
 import com.example.superiorcontroller.recording.RecordingRepository
+import com.example.superiorcontroller.service.HidForegroundService
 import com.example.superiorcontroller.settings.SettingsRepository
 import com.example.superiorcontroller.ui.components.ButtonHaptics
 import com.example.superiorcontroller.ui.components.ButtonSoundPlayer
@@ -41,6 +42,8 @@ import java.util.Date
 import java.util.Locale
 import android.os.SystemClock
 import java.util.UUID
+
+enum class HwConnectionType { NONE, USB, BLUETOOTH }
 
 class GamepadViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -84,7 +87,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _triggerMode = MutableStateFlow(SettingsRepository.MODE_ANALOG)
     val triggerMode: StateFlow<String> = _triggerMode.asStateFlow()
 
-    private val _debugLogVisible = MutableStateFlow(true)
+    private val _debugLogVisible = MutableStateFlow(false)
     val debugLogVisible: StateFlow<Boolean> = _debugLogVisible.asStateFlow()
 
     // ── Known devices / connection management ──────────────────────────
@@ -106,6 +109,19 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _hwDeviceName = MutableStateFlow<String?>(null)
     val hwDeviceName: StateFlow<String?> = _hwDeviceName.asStateFlow()
 
+    private val _hwConnectionType = MutableStateFlow(HwConnectionType.NONE)
+    val hwConnectionType: StateFlow<HwConnectionType> = _hwConnectionType.asStateFlow()
+
+    // ── BT warning dialog state ────────────────────────────────────────
+
+    private val _showBtWarning = MutableStateFlow(false)
+    val showBtWarning: StateFlow<Boolean> = _showBtWarning.asStateFlow()
+    private var pendingDeviceAfterWarning: String? = null
+
+    // ── Foreground Service state ───────────────────────────────────────
+
+    private var hidServiceRunning = false
+
     // ── Recording / Playback ────────────────────────────────────────────
 
     private val _isRecording = MutableStateFlow(false)
@@ -126,7 +142,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     private val settingsRepo = SettingsRepository(application.applicationContext)
     private val knownDevicesRepo = KnownDevicesRepository(application.applicationContext)
-    private val hidManager = BluetoothHidManager(application.applicationContext)
+    val hidManager = BluetoothHidManager(application.applicationContext)
     private val hwManager = HardwareGamepadManager(application.applicationContext)
 
     private val recorder = InputRecorder()
@@ -143,8 +159,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         "proxy=${_proxyReady.value} reg=${_isRegistered.value} " +
         "conn=${_isConnected.value} host=${_connectedDeviceName.value} " +
         "hostAddr=${_connectedHostAddress.value} " +
-        "hw=${_hwConnected.value} hwName=${_hwDeviceName.value} " +
-        "| mgr: ${hidManager.stateSnapshot()}"
+        "hw=${_hwConnected.value} hwName=${_hwDeviceName.value} hwType=${_hwConnectionType.value} " +
+        "svc=$hidServiceRunning | mgr: ${hidManager.stateSnapshot()}"
 
     // ── Listeners ───────────────────────────────────────────────────────
 
@@ -163,6 +179,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             addLog("VM_REG_CHANGED: registered=$registered prev=$prev lifecycle=$currentLifecycleState hw=${_hwConnected.value}")
 
             if (registered) {
+                startHidService()
                 val pending = pendingConnectAfterRegister
                 if (pending != null) {
                     pendingConnectAfterRegister = null
@@ -173,6 +190,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
                 if (pendingConnectAfterRegister != null) {
                     addLog("LAZY_CONNECT_CANCELLED: registration lost, clearing pending=$pendingConnectAfterRegister")
                     pendingConnectAfterRegister = null
+                }
+                if (!_isConnected.value) {
+                    stopHidService()
                 }
             }
         }
@@ -200,8 +220,14 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
                     val saved = refreshed.find { it.address == address }
                     _connectedDeviceName.value = saved?.displayName ?: btName
                 }
+                updateHidServiceNotification()
             } else {
                 _connectedDeviceName.value = null
+                if (!_isRegistered.value) {
+                    stopHidService()
+                } else {
+                    updateHidServiceNotification()
+                }
             }
         }
         override fun onLog(message: String) { addLog(message) }
@@ -229,8 +255,10 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         override fun onHwDeviceConnected(name: String, vendorId: Int, productId: Int) {
             _hwConnected.value = true
             _hwDeviceName.value = name
+            _hwConnectionType.value = detectConnectionType(name)
             addLog(
                 "GAMEPAD_CONNECTED: $name (VID:${"%04X".format(vendorId)} PID:${"%04X".format(productId)}) " +
+                "type=${_hwConnectionType.value} " +
                 "lifecycle=$currentLifecycleState reg=${_isRegistered.value} conn=${_isConnected.value}"
             )
         }
@@ -238,6 +266,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             val prevName = _hwDeviceName.value
             _hwConnected.value = false
             _hwDeviceName.value = null
+            _hwConnectionType.value = HwConnectionType.NONE
             addLog(
                 "GAMEPAD_DISCONNECTED: $name (was=$prevName) " +
                 "lifecycle=$currentLifecycleState reg=${_isRegistered.value} conn=${_isConnected.value} " +
@@ -333,6 +362,76 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // ── Foreground Service management ───────────────────────────────────
+
+    private fun startHidService() {
+        if (hidServiceRunning) {
+            updateHidServiceNotification()
+            return
+        }
+        hidServiceRunning = true
+        val hostName = _connectedDeviceName.value
+        val registered = _isRegistered.value
+        addLog("SERVICE_START: host=$hostName reg=$registered")
+        HidForegroundService.start(getApplication(), hostName, registered)
+    }
+
+    private fun updateHidServiceNotification() {
+        if (!hidServiceRunning) return
+        val hostName = _connectedDeviceName.value
+        val registered = _isRegistered.value
+        HidForegroundService.update(getApplication(), hostName, registered)
+    }
+
+    private fun stopHidService() {
+        if (!hidServiceRunning) return
+        hidServiceRunning = false
+        addLog("SERVICE_STOP")
+        HidForegroundService.stop(getApplication())
+    }
+
+    // ── HW connection type heuristic ───────────────────────────────────
+
+    @SuppressLint("MissingPermission")
+    private fun detectConnectionType(hwName: String): HwConnectionType {
+        val bondedNames = try {
+            hidManager.getBondedDevices().mapNotNull { it.name }
+        } catch (_: SecurityException) {
+            emptyList()
+        }
+        return if (bondedNames.any { it.equals(hwName, ignoreCase = true) }) {
+            HwConnectionType.BLUETOOTH
+        } else {
+            HwConnectionType.USB
+        }
+    }
+
+    // ── BT warning dialog flow ─────────────────────────────────────────
+
+    fun confirmBtWarning() {
+        _showBtWarning.value = false
+        val address = pendingDeviceAfterWarning ?: return
+        pendingDeviceAfterWarning = null
+        proceedWithConnection(address)
+    }
+
+    fun dismissBtWarning() {
+        _showBtWarning.value = false
+        pendingDeviceAfterWarning = null
+    }
+
+    private fun proceedWithConnection(address: String) {
+        userDisconnected = false
+        if (!hidManager.isRegistered) {
+            addLog("PROCEED_LAZY: registering first, then connecting to $address")
+            pendingConnectAfterRegister = address
+            hidManager.registerApp(reason = "LAZY_REGISTER_FOR_CONNECT")
+            return
+        }
+        addLog("PROCEED_SWITCH: switching to $address | ${diagnosticState()}")
+        hidManager.switchToHost(address)
+    }
+
     // ── Lifecycle / Connection management ───────────────────────────────
 
     fun initializeBluetooth() {
@@ -351,6 +450,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     fun unregisterHidApp() {
         addLog("MANUAL_UNREGISTER: user requested | ${diagnosticState()}")
         hidManager.unregisterApp(reason = "USER_MANUAL_UNREGISTER")
+        stopHidService()
     }
 
     fun getBondedDevices(): List<BluetoothDevice> = hidManager.getBondedDevices()
@@ -380,17 +480,15 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     fun switchToDevice(address: String) {
         userDisconnected = false
         if (!hidManager.isProxyReady()) { addLog("SWITCH_FAIL: proxy not ready"); return }
-        if (!hidManager.isRegistered) {
-            addLog(
-                "SWITCH_LAZY: not registered — registering first, then connecting to $address " +
-                "(reason=LAZY_REGISTER_FOR_CONNECT) hw=${_hwConnected.value}"
-            )
-            pendingConnectAfterRegister = address
-            hidManager.registerApp(reason = "LAZY_REGISTER_FOR_CONNECT")
+
+        if (!hidManager.isRegistered && _hwConnectionType.value == HwConnectionType.BLUETOOTH) {
+            addLog("BT_WARNING: hw controller is Bluetooth, showing warning before HID registration")
+            pendingDeviceAfterWarning = address
+            _showBtWarning.value = true
             return
         }
-        addLog("BT_SWITCH: requesting switch to $address | ${diagnosticState()}")
-        hidManager.switchToHost(address)
+
+        proceedWithConnection(address)
     }
 
     fun removeKnownDevice(address: String) {
@@ -415,12 +513,6 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         _bondedDeviceInfo.value = hidManager.getHostCandidates()
     }
 
-    /**
-     * Called from Activity.onResume. Syncs ViewModel StateFlows with the real
-     * BluetoothHidManager state. If the proxy was lost, re-acquires it.
-     * Never auto-registers or auto-connects — fully passive to avoid
-     * disrupting external BT devices (e.g. Xbox controller).
-     */
     fun recoverConnection() {
         val btAvailable = hidManager.isBluetoothAvailable() && hidManager.isBluetoothEnabled()
         val prevBt = _bluetoothAvailable.value
@@ -436,7 +528,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         addLog(
             "RECOVER: prevBt=$prevBt→$btAvailable prevProxy=$prevProxy→${hidManager.isProxyReady()} " +
             "prevReg=$prevReg→${hidManager.isRegistered} prevConn=$prevConn→${hidManager.isConnected} " +
-            "hw=${_hwConnected.value} | mgr: ${hidManager.stateSnapshot()}"
+            "hw=${_hwConnected.value} svc=$hidServiceRunning | mgr: ${hidManager.stateSnapshot()}"
         )
 
         if (!btAvailable || !hidManager.isProxyReady()) {
@@ -444,12 +536,12 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             hidManager.initialize(reason = "ACTIVITY_RESUME_NO_PROXY")
         } else if (!hidManager.isRegistered && prevReg) {
             addLog(
-                "RECOVER_INFO: registration was lost during background (AOSP HidDeviceService " +
-                "auto-unregisters when process importance drops). NOT re-registering to preserve " +
-                "external BT connections. User must re-register manually or connect to a host."
+                "RECOVER_INFO: registration was lost during background. " +
+                "NOT re-registering to preserve external BT connections."
             )
             _connectedDeviceName.value = null
             _connectedHostAddress.value = null
+            stopHidService()
         } else {
             addLog("RECOVER_ACTION: state synced — no action needed")
         }
@@ -753,6 +845,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         playbackEngine.stop()
         hwManager.unregister()
         ButtonSoundPlayer.release()
+        stopHidService()
         hidManager.cleanup(reason = "VIEWMODEL_CLEARED")
     }
 }

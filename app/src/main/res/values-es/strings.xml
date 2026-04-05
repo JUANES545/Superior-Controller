@@ -2,38 +2,65 @@
 <resources>
     <string name="app_name">Superior Controller</string>
 
-    <!-- Status panel -->
+    <!-- Tarjeta de estado -->
+    <string name="card_permissions_needed">Se necesitan permisos Bluetooth</string>
+    <string name="card_bt_disabled">Bluetooth está desactivado</string>
+    <string name="card_initializing">Inicializando…</string>
+    <string name="card_ready">Listo</string>
+    <string name="card_hid_ready">Modo HID activo</string>
+    <string name="card_connected_to">Conectado a %1$s</string>
+    <string name="card_connect_device">Conectar a dispositivo</string>
+    <string name="card_manage_devices">Gestionar dispositivos</string>
+    <string name="card_reconnect">Reconectar %1$s</string>
+    <string name="card_input_label">Entrada:</string>
+    <string name="card_input_virtual">Control virtual</string>
+
+    <!-- Indicador de entrada -->
+    <string name="input_type_bluetooth">Entrada: Bluetooth</string>
+    <string name="input_type_usb">Entrada: USB</string>
+
+    <!-- Pasos de conexión -->
+    <string name="step_bluetooth">Bluetooth</string>
+    <string name="step_hid">HID</string>
+    <string name="step_device">Dispositivo</string>
+
+    <!-- Diálogo de advertencia BT -->
+    <string name="bt_warning_title">Control Bluetooth detectado</string>
+    <string name="bt_warning_body">Tu control actual parece estar conectado por Bluetooth.\n\nMientras la app esté en modo HID, este control se desconectará porque ambos usan el mismo canal Bluetooth.\n\nSi prefieres seguir usándolo, conéctalo por cable USB primero.</string>
+    <string name="bt_warning_continue">Continuar</string>
+
+    <!-- Panel de estado (compatibilidad) -->
     <string name="status_title">ESTADO</string>
     <string name="status_bluetooth">Bluetooth</string>
     <string name="status_hid_reg">Reg. HID</string>
     <string name="status_host">Host</string>
     <string name="status_connected">Conectado: %1$s</string>
     <string name="status_reports_sent">Reportes: %1$d</string>
+    <string name="status_not_connected">No conectado</string>
+    <string name="status_no_host">Sin host ▸</string>
+    <string name="status_hw_controller">Controlador</string>
 
-    <!-- Connection buttons -->
+    <!-- Botones de conexión -->
     <string name="btn_grant_permissions">Otorgar permisos Bluetooth</string>
-    <string name="btn_initialize_bt">Iniciar BT</string>
+    <string name="btn_initialize_bt">Activar Bluetooth</string>
     <string name="btn_register_hid">Registrar HID</string>
-    <string name="btn_discoverable">Visible</string>
-    <string name="btn_unregister">Desregistrar</string>
+    <string name="btn_discoverable">Hacer visible</string>
+    <string name="btn_unregister">Desregistrar HID</string>
     <string name="btn_disconnect">Desconectar</string>
     <string name="btn_devices">Dispositivos</string>
 
-    <!-- Device selector -->
+    <!-- Selector de dispositivos -->
     <string name="devices_title">Dispositivos</string>
     <string name="devices_saved">Dispositivos guardados</string>
     <string name="devices_paired">Dispositivos emparejados</string>
-    <string name="devices_empty">No hay dispositivos disponibles. Usa Visible para que un PC te encuentre.</string>
+    <string name="devices_empty">No hay dispositivos disponibles. Toca \"Hacer visible\" para que un dispositivo te encuentre.</string>
     <string name="devices_connect">Conectar</string>
     <string name="devices_remove">Eliminar</string>
     <string name="devices_rename">Renombrar</string>
     <string name="devices_alias_hint">Alias del dispositivo</string>
     <string name="devices_connected_label">Conectado</string>
-    <string name="status_not_connected">No conectado</string>
-    <string name="status_no_host">Sin host ▸</string>
-    <string name="status_hw_controller">Controlador</string>
 
-    <!-- Gamepad controls -->
+    <!-- Controles del gamepad -->
     <string name="btn_send_neutral">Neutral</string>
     <string name="btn_clear_log">Limpiar Log</string>
     <string name="label_back">ATRÁS</string>
@@ -45,7 +72,7 @@
     <!-- Debug -->
     <string name="debug_log_title">LOG DE DEPURACIÓN</string>
 
-    <!-- Settings -->
+    <!-- Configuración -->
     <string name="settings_title">Configuración</string>
     <string name="settings_haptics_title">Vibración de botones</string>
     <string name="settings_haptics_desc">Vibrar al presionar botones</string>
@@ -58,7 +85,7 @@
     <string name="settings_debug_log_title">Log de depuración</string>
     <string name="settings_debug_log_desc">Mostrar la consola de depuración en pantalla</string>
 
-    <!-- Recording / Playback -->
+    <!-- Grabación / Reproducción -->
     <string name="recordings_title">Grabaciones</string>
     <string name="recordings_empty">Sin grabaciones aún</string>
     <string name="recording_delete">Eliminar</string>
@@ -66,4 +93,11 @@
     <string name="recording_rename">Renombrar</string>
     <string name="dialog_cancel">Cancelar</string>
     <string name="dialog_ok">Aceptar</string>
+
+    <!-- Notificación del servicio -->
+    <string name="notif_channel_name">Control HID</string>
+    <string name="notif_channel_desc">Activa mientras la app funciona como control Bluetooth</string>
+    <string name="notif_hid_active">Modo HID activo</string>
+    <string name="notif_hid_ready">Listo para conectar</string>
+    <string name="notif_connected_to">Conectado a %1$s</string>
 </resources>

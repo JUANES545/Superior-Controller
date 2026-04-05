@@ -6,7 +6,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,6 +69,7 @@ import com.example.superiorcontroller.ui.components.StickClickRow
 import com.example.superiorcontroller.ui.components.TriggerRow
 import com.example.superiorcontroller.ui.components.VirtualJoystick
 import com.example.superiorcontroller.viewmodel.GamepadViewModel
+import com.example.superiorcontroller.viewmodel.HwConnectionType
 
 @Composable
 fun GamepadScreen(
@@ -117,6 +119,15 @@ fun GamepadScreen(
     val recordingElapsedMs by viewModel.recordingElapsedMs.collectAsState()
     val recordings by viewModel.recordings.collectAsState()
     val playbackProgress by viewModel.playbackProgress.collectAsState()
+
+    val showBtWarning by viewModel.showBtWarning.collectAsState()
+
+    if (showBtWarning) {
+        BtWarningDialog(
+            onConfirm = { viewModel.confirmBtWarning() },
+            onDismiss = { viewModel.dismissBtWarning() }
+        )
+    }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isLandscape = maxWidth > maxHeight
@@ -226,7 +237,43 @@ fun GamepadScreen(
     }
 }
 
-// ── Portrait ────────────────────────────────────────────────────────────────
+// ── BT Warning Dialog ──────────────────────────────────────────────────
+
+@Composable
+private fun BtWarningDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Text("⚠️", fontSize = 28.sp) },
+        title = {
+            Text(
+                stringResource(R.string.bt_warning_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+        },
+        text = {
+            Text(
+                stringResource(R.string.bt_warning_body),
+                style = MaterialTheme.typography.bodyMedium,
+                lineHeight = 22.sp
+            )
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text(stringResource(R.string.bt_warning_continue))
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
+}
+
+// ── Portrait ────────────────────────────────────────────────────────────
 
 @Composable
 private fun PortraitLayout(
@@ -246,6 +293,10 @@ private fun PortraitLayout(
     gsRightX: Float, gsRightY: Float,
     gsLT: Float, gsRT: Float
 ) {
+    val hwConnected by viewModel.hwConnected.collectAsState()
+    val hwDeviceName by viewModel.hwDeviceName.collectAsState()
+    val hwType by viewModel.hwConnectionType.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -253,7 +304,7 @@ private fun PortraitLayout(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        BluetoothBar(
+        StatusCard(
             viewModel = viewModel,
             permissionsGranted = permissionsGranted,
             onRequestPermissions = onRequestPermissions,
@@ -263,10 +314,20 @@ private fun PortraitLayout(
 
         Spacer(Modifier.height(10.dp))
 
-        TriggerRow(onLeftTrigger = onLeftTrigger, onRightTrigger = onRightTrigger,
-            buttonMode = triggerButtonMode, hwLeftTrigger = gsLT, hwRightTrigger = gsRT)
+        TriggerRow(
+            onLeftTrigger = onLeftTrigger, onRightTrigger = onRightTrigger,
+            buttonMode = triggerButtonMode, hwLeftTrigger = gsLT, hwRightTrigger = gsRT
+        )
         Spacer(Modifier.height(4.dp))
-        BumperRow(onPress = onPress, onRelease = onRelease, hwButtons = gsButtons)
+
+        InputBumperRow(
+            onPress = onPress,
+            onRelease = onRelease,
+            hwButtons = gsButtons,
+            hwConnected = hwConnected,
+            hwDeviceName = hwDeviceName,
+            hwType = hwType
+        )
 
         Spacer(Modifier.height(8.dp))
 
@@ -334,7 +395,7 @@ private fun PortraitLayout(
     }
 }
 
-// ── Landscape ───────────────────────────────────────────────────────────────
+// ── Landscape ───────────────────────────────────────────────────────────
 
 @Composable
 private fun LandscapeLayout(
@@ -364,12 +425,13 @@ private fun LandscapeLayout(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            BluetoothBar(
+            StatusCard(
                 viewModel = viewModel,
                 permissionsGranted = permissionsGranted,
                 onRequestPermissions = onRequestPermissions,
                 onMakeDiscoverable = onMakeDiscoverable,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                compact = true
             )
 
             Spacer(Modifier.width(6.dp))
@@ -469,15 +531,104 @@ private fun LandscapeLayout(
     }
 }
 
-// ── Bluetooth status bar ────────────────────────────────────────────────────
+// ── Input + Bumper Row (LB · InputIndicator · RB) ──────────────────────
 
 @Composable
-private fun BluetoothBar(
+private fun InputBumperRow(
+    onPress: (Int) -> Unit,
+    onRelease: (Int) -> Unit,
+    hwButtons: Int,
+    hwConnected: Boolean,
+    hwDeviceName: String?,
+    hwType: HwConnectionType
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ControlButton(
+            "LB", GamepadButtons.LB, Color(0xFFFF9800), onPress, onRelease,
+            hwPressed = (hwButtons and GamepadButtons.LB) != 0
+        )
+
+        InputIndicator(
+            hwConnected = hwConnected,
+            hwDeviceName = hwDeviceName,
+            hwType = hwType,
+            modifier = Modifier.weight(1f, fill = false).padding(horizontal = 8.dp)
+        )
+
+        ControlButton(
+            "RB", GamepadButtons.RB, Color(0xFFFF9800), onPress, onRelease,
+            hwPressed = (hwButtons and GamepadButtons.RB) != 0
+        )
+    }
+}
+
+// ── Input Indicator (2 lines, centered) ────────────────────────────────
+
+@Composable
+private fun InputIndicator(
+    hwConnected: Boolean,
+    hwDeviceName: String?,
+    hwType: HwConnectionType,
+    modifier: Modifier = Modifier
+) {
+    if (hwConnected && hwDeviceName != null) {
+        val typeLine = when (hwType) {
+            HwConnectionType.BLUETOOTH -> stringResource(R.string.input_type_bluetooth)
+            HwConnectionType.USB -> stringResource(R.string.input_type_usb)
+            HwConnectionType.NONE -> stringResource(R.string.card_input_virtual)
+        }
+        val accentColor = when (hwType) {
+            HwConnectionType.BLUETOOTH -> Color(0xFF2196F3)
+            HwConnectionType.USB -> Color(0xFF4CAF50)
+            HwConnectionType.NONE -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        Column(
+            modifier = modifier,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = typeLine,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = accentColor,
+                letterSpacing = 0.5.sp
+            )
+            Text(
+                text = hwDeviceName,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
+    } else {
+        Text(
+            text = stringResource(R.string.card_input_virtual),
+            modifier = modifier,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+// ── Status Card ────────────────────────────────────────────────────────
+
+@Composable
+private fun StatusCard(
     viewModel: GamepadViewModel,
     permissionsGranted: Boolean,
     onRequestPermissions: () -> Unit,
     onMakeDiscoverable: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
     val bluetoothAvailable by viewModel.bluetoothAvailable.collectAsState()
     val proxyReady by viewModel.proxyReady.collectAsState()
@@ -488,74 +639,31 @@ private fun BluetoothBar(
     val reportsSent by viewModel.reportsSent.collectAsState()
     val knownDevices by viewModel.knownDevices.collectAsState()
     val bondedDevices by viewModel.bondedDeviceInfo.collectAsState()
-    val hwConnected by viewModel.hwConnected.collectAsState()
-    val hwDeviceName by viewModel.hwDeviceName.collectAsState()
 
     var showDeviceSelector by remember { mutableStateOf(false) }
 
-    Row(
+    Surface(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 2.dp
     ) {
-        // ── Pre-registration: show setup buttons ─────────────────
-        if (!permissionsGranted) {
-            Button(onClick = onRequestPermissions) {
-                Text(stringResource(R.string.btn_grant_permissions), fontSize = 11.sp)
-            }
-            return@Row
-        }
-        if (!bluetoothAvailable) {
-            Button(onClick = { viewModel.initializeBluetooth() }) {
-                Text(stringResource(R.string.btn_initialize_bt), fontSize = 11.sp)
-            }
-            return@Row
-        }
-        if (bluetoothAvailable && proxyReady && !isRegistered) {
-            StatusDots(bt = true, hid = false)
-            Button(
-                onClick = { viewModel.registerHidApp() },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
-            ) { Text(stringResource(R.string.btn_register_hid), fontSize = 11.sp) }
-            return@Row
-        }
-
-        // ── Post-registration: status dots + chips ───────────────
-        if (isRegistered) {
-            StatusDots(bt = true, hid = true)
-
-            HostChip(
+        when {
+            !permissionsGranted -> PermissionsContent(onRequestPermissions, compact)
+            !bluetoothAvailable -> InitBtContent(viewModel, compact)
+            else -> MainStatusContent(
+                viewModel = viewModel,
+                isRegistered = isRegistered,
                 isConnected = isConnected,
-                deviceName = connectedDevice,
-                onClick = {
+                connectedDevice = connectedDevice,
+                proxyReady = proxyReady,
+                reportsSent = reportsSent,
+                bluetoothAvailable = bluetoothAvailable,
+                compact = compact,
+                onOpenDevices = {
                     viewModel.refreshBondedDevices()
                     showDeviceSelector = true
                 }
-            )
-
-            if (!isConnected) {
-                val lastKnown = knownDevices.firstOrNull()
-                if (lastKnown != null) {
-                    Button(
-                        onClick = { viewModel.switchToDevice(lastKnown.address) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
-                    ) {
-                        Text(
-                            "↻ ${lastKnown.displayName}",
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-            HwControllerChip(connected = hwConnected, deviceName = hwDeviceName)
-
-            Text(
-                text = "#$reportsSent",
-                fontSize = 9.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -590,86 +698,320 @@ private fun BluetoothBar(
     }
 }
 
-// ── Sub-components ──────────────────────────────────────────────────────────
+// ── Card content states ────────────────────────────────────────────────
 
 @Composable
-private fun StatusDots(bt: Boolean, hid: Boolean) {
-    val green = Color(0xFF4CAF50)
-    val red = Color(0xFFB71C1C)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        StatusDot(active = bt, activeColor = green, inactiveColor = red)
-        Spacer(Modifier.width(3.dp))
-        StatusDot(active = hid, activeColor = green, inactiveColor = red)
+private fun PermissionsContent(onRequestPermissions: () -> Unit, compact: Boolean) {
+    Column(modifier = Modifier.padding(if (compact) 10.dp else 16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StepDot(StepState.BLOCKED)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(R.string.card_permissions_needed),
+                style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        if (!compact) Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = onRequestPermissions,
+            modifier = if (compact) Modifier.padding(top = 4.dp) else Modifier.fillMaxWidth().padding(top = 8.dp)
+        ) {
+            Text(
+                stringResource(R.string.btn_grant_permissions),
+                fontSize = if (compact) 11.sp else 14.sp
+            )
+        }
     }
 }
 
 @Composable
-private fun StatusDot(active: Boolean, activeColor: Color, inactiveColor: Color) {
-    val color by animateColorAsState(if (active) activeColor else inactiveColor, label = "dot")
-    Box(Modifier.size(8.dp).background(color, CircleShape))
+private fun InitBtContent(viewModel: GamepadViewModel, compact: Boolean) {
+    Column(modifier = Modifier.padding(if (compact) 10.dp else 16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StepDot(StepState.BLOCKED)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(R.string.card_bt_disabled),
+                style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        if (!compact) Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = { viewModel.initializeBluetooth() },
+            modifier = if (compact) Modifier.padding(top = 4.dp) else Modifier.fillMaxWidth().padding(top = 8.dp)
+        ) {
+            Text(
+                stringResource(R.string.btn_initialize_bt),
+                fontSize = if (compact) 11.sp else 14.sp
+            )
+        }
+    }
 }
 
 @Composable
-private fun HostChip(
+private fun MainStatusContent(
+    viewModel: GamepadViewModel,
+    isRegistered: Boolean,
     isConnected: Boolean,
-    deviceName: String?,
-    onClick: () -> Unit
+    connectedDevice: String?,
+    proxyReady: Boolean,
+    reportsSent: Long,
+    bluetoothAvailable: Boolean,
+    compact: Boolean,
+    onOpenDevices: () -> Unit
 ) {
-    val bgColor = if (isConnected)
-        Color(0xFF4CAF50).copy(alpha = 0.15f)
-    else
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-    val dotColor = if (isConnected) Color(0xFF4CAF50) else Color(0xFFB71C1C)
-
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = bgColor,
-        tonalElevation = 2.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(Modifier.size(7.dp).background(dotColor, CircleShape))
-            Spacer(Modifier.width(5.dp))
-            Text(
-                text = if (isConnected && deviceName != null) deviceName
-                       else stringResource(R.string.status_no_host),
-                fontSize = 11.sp,
-                fontWeight = if (isConnected) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+    Column(modifier = Modifier.padding(if (compact) 10.dp else 16.dp)) {
+        if (!compact) {
+            ConnectionSteps(
+                bluetoothOk = bluetoothAvailable && proxyReady,
+                hidRegistered = isRegistered,
+                hostConnected = isConnected,
+                modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.width(3.dp))
-            Text("▾", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (isConnected && connectedDevice != null) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = connectedDevice,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "#$reportsSent",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            val statusColor = when {
+                isConnected -> Color(0xFF4CAF50)
+                isRegistered -> Color(0xFF2196F3)
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            val statusText = when {
+                isConnected -> stringResource(R.string.card_connected_to, connectedDevice ?: "")
+                isRegistered -> stringResource(R.string.card_hid_ready)
+                proxyReady -> stringResource(R.string.card_ready)
+                else -> stringResource(R.string.card_initializing)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StepDot(
+                    when {
+                        isConnected -> StepState.DONE
+                        isRegistered -> StepState.ACTIVE
+                        else -> StepState.PENDING
+                    }
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (isConnected) {
+                    Spacer(Modifier.width(6.dp))
+                    Text("#$reportsSent", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(if (compact) 6.dp else 12.dp))
+
+        if (compact) {
+            CompactActions(
+                isConnected = isConnected,
+                proxyReady = proxyReady,
+                viewModel = viewModel,
+                onOpenDevices = onOpenDevices
+            )
+        } else {
+            FullActions(
+                isConnected = isConnected,
+                proxyReady = proxyReady,
+                viewModel = viewModel,
+                onOpenDevices = onOpenDevices
+            )
         }
     }
 }
 
 @Composable
-private fun HwControllerChip(connected: Boolean, deviceName: String?) {
-    if (!connected) return
-
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = Color(0xFF2196F3).copy(alpha = 0.12f),
-        tonalElevation = 1.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("🎮", fontSize = 10.sp)
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text = deviceName?.take(16) ?: stringResource(R.string.status_hw_controller),
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = Color(0xFF1565C0)
-            )
+private fun CompactActions(
+    isConnected: Boolean,
+    proxyReady: Boolean,
+    viewModel: GamepadViewModel,
+    onOpenDevices: () -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (isConnected) {
+            OutlinedButton(onClick = onOpenDevices) {
+                Text(stringResource(R.string.card_manage_devices), fontSize = 10.sp)
+            }
+            Button(
+                onClick = { viewModel.disconnectFromHost() },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+            ) {
+                Text(stringResource(R.string.btn_disconnect), fontSize = 10.sp, color = Color.White)
+            }
+        } else if (proxyReady) {
+            Button(
+                onClick = onOpenDevices,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
+            ) {
+                Text(stringResource(R.string.card_connect_device), fontSize = 10.sp)
+            }
         }
     }
+}
+
+@Composable
+private fun FullActions(
+    isConnected: Boolean,
+    proxyReady: Boolean,
+    viewModel: GamepadViewModel,
+    onOpenDevices: () -> Unit
+) {
+    val knownDevices by viewModel.knownDevices.collectAsState()
+    val isRegistered by viewModel.isRegistered.collectAsState()
+
+    if (isConnected) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = onOpenDevices,
+                modifier = Modifier.weight(1f)
+            ) { Text(stringResource(R.string.card_manage_devices), fontSize = 13.sp) }
+            Button(
+                onClick = { viewModel.disconnectFromHost() },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+            ) { Text(stringResource(R.string.btn_disconnect), fontSize = 13.sp, color = Color.White) }
+        }
+    } else if (proxyReady) {
+        Button(
+            onClick = onOpenDevices,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
+        ) {
+            Text(stringResource(R.string.card_connect_device), fontSize = 14.sp)
+        }
+
+        if (!isRegistered && knownDevices.isNotEmpty()) {
+            val last = knownDevices.first()
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = { viewModel.switchToDevice(last.address) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    stringResource(R.string.card_reconnect, last.displayName),
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+// ── Connection Steps ───────────────────────────────────────────────────
+
+private enum class StepState { PENDING, ACTIVE, DONE, BLOCKED }
+
+@Composable
+private fun ConnectionSteps(
+    bluetoothOk: Boolean,
+    hidRegistered: Boolean,
+    hostConnected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val btState = when {
+        bluetoothOk -> StepState.DONE
+        else -> StepState.ACTIVE
+    }
+    val hidState = when {
+        hidRegistered -> StepState.DONE
+        bluetoothOk -> StepState.ACTIVE
+        else -> StepState.PENDING
+    }
+    val deviceState = when {
+        hostConnected -> StepState.DONE
+        hidRegistered -> StepState.ACTIVE
+        else -> StepState.PENDING
+    }
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        StepItem(stringResource(R.string.step_bluetooth), btState)
+        StepLine(btState == StepState.DONE)
+        StepItem(stringResource(R.string.step_hid), hidState)
+        StepLine(hidState == StepState.DONE)
+        StepItem(stringResource(R.string.step_device), deviceState)
+    }
+}
+
+@Composable
+private fun StepItem(label: String, state: StepState) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        StepDot(state)
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = label,
+            fontSize = 9.sp,
+            fontWeight = if (state == StepState.ACTIVE || state == StepState.DONE) FontWeight.SemiBold else FontWeight.Normal,
+            color = when (state) {
+                StepState.DONE -> Color(0xFF4CAF50)
+                StepState.ACTIVE -> Color(0xFF2196F3)
+                StepState.BLOCKED -> Color(0xFFFF9800)
+                StepState.PENDING -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            },
+            letterSpacing = 0.3.sp
+        )
+    }
+}
+
+@Composable
+private fun StepDot(state: StepState) {
+    val color by animateColorAsState(
+        when (state) {
+            StepState.DONE -> Color(0xFF4CAF50)
+            StepState.ACTIVE -> Color(0xFF2196F3)
+            StepState.BLOCKED -> Color(0xFFFF9800)
+            StepState.PENDING -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+        },
+        label = "step"
+    )
+    Box(Modifier.size(10.dp).background(color, CircleShape))
+}
+
+@Composable
+private fun StepLine(completed: Boolean) {
+    val color by animateColorAsState(
+        if (completed) Color(0xFF4CAF50).copy(alpha = 0.6f)
+        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+        label = "line"
+    )
+    Box(
+        Modifier
+            .width(28.dp)
+            .height(2.dp)
+            .background(color, RoundedCornerShape(1.dp))
+    )
 }
