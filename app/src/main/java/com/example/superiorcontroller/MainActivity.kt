@@ -29,6 +29,7 @@ import com.example.superiorcontroller.viewmodel.GamepadViewModel
 class MainActivity : ComponentActivity() {
 
     private val gamepadViewModel: GamepadViewModel by viewModels()
+    private var hasResumedOnce = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +60,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (hasResumedOnce && hasBluetoothPermissions()) {
+            gamepadViewModel.recoverConnection()
+        }
+        hasResumedOnce = true
     }
 
     // ── Hardware gamepad event capture ────────────────────────────────

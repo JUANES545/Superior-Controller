@@ -1,5 +1,6 @@
 package com.example.superiorcontroller.viewmodel
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.bluetooth.BluetoothDevice
 import android.util.Log
@@ -8,6 +9,8 @@ import android.view.MotionEvent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.superiorcontroller.bluetooth.BluetoothHidManager
+import com.example.superiorcontroller.bluetooth.KnownDevice
+import com.example.superiorcontroller.bluetooth.KnownDevicesRepository
 import com.example.superiorcontroller.hid.AxisDefaults
 import com.example.superiorcontroller.hid.GamepadButtons
 import com.example.superiorcontroller.hid.GamepadReportBuilder
@@ -15,6 +18,7 @@ import com.example.superiorcontroller.hid.GamepadState
 import com.example.superiorcontroller.hid.HidDescriptor
 import com.example.superiorcontroller.hid.TriggerDefaults
 import com.example.superiorcontroller.input.HardwareGamepadManager
+import com.example.superiorcontroller.recording.GamepadSnapshot
 import com.example.superiorcontroller.recording.InputRecorder
 import com.example.superiorcontroller.recording.PlaybackEngine
 import com.example.superiorcontroller.recording.PlaybackProgress
@@ -35,6 +39,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.os.SystemClock
 import java.util.UUID
 
 class GamepadViewModel(application: Application) : AndroidViewModel(application) {
@@ -79,6 +84,17 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _debugLogVisible = MutableStateFlow(true)
     val debugLogVisible: StateFlow<Boolean> = _debugLogVisible.asStateFlow()
 
+    // ── Known devices / connection management ──────────────────────────
+
+    private val _knownDevices = MutableStateFlow<List<KnownDevice>>(emptyList())
+    val knownDevices: StateFlow<List<KnownDevice>> = _knownDevices.asStateFlow()
+
+    private val _bondedDeviceInfo = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val bondedDeviceInfo: StateFlow<List<Pair<String, String>>> = _bondedDeviceInfo.asStateFlow()
+
+    private var userDisconnected = false
+    private var pendingRecovery = false
+
     // ── Hardware controller ─────────────────────────────────────────────
 
     private val _hwConnected = MutableStateFlow(false)
@@ -106,6 +122,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
     private val settingsRepo = SettingsRepository(application.applicationContext)
+    private val knownDevicesRepo = KnownDevicesRepository(application.applicationContext)
     private val hidManager = BluetoothHidManager(application.applicationContext)
     private val hwManager = HardwareGamepadManager(application.applicationContext)
 
@@ -117,23 +134,60 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     // ── Listeners ───────────────────────────────────────────────────────
 
+    @SuppressLint("MissingPermission")
     private val managerListener = object : BluetoothHidManager.Listener {
-        override fun onProxyReady() { _proxyReady.value = true }
-        override fun onRegistrationChanged(registered: Boolean) { _isRegistered.value = registered }
+        override fun onProxyReady() {
+            _proxyReady.value = true
+            if (pendingRecovery) {
+                pendingRecovery = false
+                recoverConnection()
+            }
+        }
+        override fun onRegistrationChanged(registered: Boolean) {
+            _isRegistered.value = registered
+            if (registered && pendingRecovery) {
+                pendingRecovery = false
+                recoverConnection()
+            }
+        }
         override fun onConnectionChanged(device: BluetoothDevice?, connected: Boolean) {
             _isConnected.value = connected
             _connectedDeviceName.value = device?.name ?: device?.address
+            if (connected && device != null) {
+                userDisconnected = false
+                val kd = KnownDevice(
+                    name = device.name ?: device.address ?: "Unknown",
+                    address = device.address ?: "",
+                    lastUsedAt = System.currentTimeMillis()
+                )
+                viewModelScope.launch(Dispatchers.IO) {
+                    knownDevicesRepo.save(kd)
+                    _knownDevices.value = knownDevicesRepo.loadAll()
+                }
+            }
         }
         override fun onLog(message: String) { addLog(message) }
     }
 
     private val hwListener = object : HardwareGamepadManager.Listener {
-        override fun onHwButtonDown(button: Int, name: String) { pressButton(button, "[HW] ") }
-        override fun onHwButtonUp(button: Int, name: String) { releaseButton(button, "[HW] ") }
-        override fun onHwLeftAxis(x: Float, y: Float) { setLeftAxis(x, y) }
-        override fun onHwRightAxis(x: Float, y: Float) { setRightAxis(x, y) }
-        override fun onHwLeftTrigger(value: Float) { setLeftTrigger(value) }
-        override fun onHwRightTrigger(value: Float) { setRightTrigger(value) }
+        override fun onHwButtonDown(button: Int, name: String, eventTimeMs: Long) {
+            pressButton(button, "[HW] ", hwEventTimeMs = eventTimeMs)
+        }
+        override fun onHwButtonUp(button: Int, name: String, eventTimeMs: Long) {
+            releaseButton(button, "[HW] ", hwEventTimeMs = eventTimeMs)
+        }
+        override fun onHwLeftAxis(x: Float, y: Float, eventTimeMs: Long) {
+            setLeftAxis(x, y, hwEventTimeMs = eventTimeMs)
+        }
+        override fun onHwRightAxis(x: Float, y: Float, eventTimeMs: Long) {
+            setRightAxis(x, y, hwEventTimeMs = eventTimeMs)
+        }
+        override fun onHwLeftTrigger(value: Float, eventTimeMs: Long) {
+            setLeftTrigger(value, hwEventTimeMs = eventTimeMs)
+        }
+        override fun onHwRightTrigger(value: Float, eventTimeMs: Long) {
+            setRightTrigger(value, hwEventTimeMs = eventTimeMs)
+        }
         override fun onHwDeviceConnected(name: String, vendorId: Int, productId: Int) {
             _hwConnected.value = true
             _hwDeviceName.value = name
@@ -147,12 +201,46 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private val playbackSink = object : PlaybackEngine.EventSink {
+        override fun onPlaybackReset() {
+            _gamepadState.value = GamepadState()
+            if (_isConnected.value) {
+                hidManager.sendReport(GamepadReportBuilder.neutralReport(), force = true)
+            }
+            addLog("PB_RESET: neutral")
+        }
+        override fun onPlaybackApplySnapshot(snapshot: GamepadSnapshot) {
+            val lx = ((snapshot.leftX + 1f) / 2f * AxisDefaults.MAX).toInt()
+                .coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+            val ly = ((snapshot.leftY + 1f) / 2f * AxisDefaults.MAX).toInt()
+                .coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+            val rx = ((snapshot.rightX + 1f) / 2f * AxisDefaults.MAX).toInt()
+                .coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+            val ry = ((snapshot.rightY + 1f) / 2f * AxisDefaults.MAX).toInt()
+                .coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+            val lt = (snapshot.leftTrigger * TriggerDefaults.MAX).toInt()
+                .coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX)
+            val rt = (snapshot.rightTrigger * TriggerDefaults.MAX).toInt()
+                .coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX)
+            _gamepadState.value = GamepadState(
+                buttons = snapshot.buttons,
+                dpad = snapshot.dpad,
+                leftX = lx, leftY = ly,
+                rightX = rx, rightY = ry,
+                leftTrigger = lt, rightTrigger = rt
+            )
+            if (_isConnected.value) {
+                hidManager.sendReport(
+                    GamepadReportBuilder.buildReport(_gamepadState.value), force = true
+                )
+            }
+            addLog("PB_SNAPSHOT: applied")
+        }
         override fun onPlaybackButtonPress(button: Int) { pressButton(button, "[PB] ") }
         override fun onPlaybackButtonRelease(button: Int) { releaseButton(button, "[PB] ") }
-        override fun onPlaybackLeftAxis(x: Float, y: Float) { setLeftAxis(x, y) }
-        override fun onPlaybackRightAxis(x: Float, y: Float) { setRightAxis(x, y) }
-        override fun onPlaybackLeftTrigger(value: Float) { setLeftTrigger(value) }
-        override fun onPlaybackRightTrigger(value: Float) { setRightTrigger(value) }
+        override fun onPlaybackLeftAxis(x: Float, y: Float) { setLeftAxis(x, y, fromPlayback = true) }
+        override fun onPlaybackRightAxis(x: Float, y: Float) { setRightAxis(x, y, fromPlayback = true) }
+        override fun onPlaybackLeftTrigger(value: Float) { setLeftTrigger(value, fromPlayback = true) }
+        override fun onPlaybackRightTrigger(value: Float) { setRightTrigger(value, fromPlayback = true) }
         override fun onPlaybackComplete() { addLog("PLAYBACK_COMPLETE") }
         override fun onPlaybackLog(message: String) { addLog(message) }
     }
@@ -164,6 +252,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         hwManager.listener = hwListener
         hwManager.register()
         playbackEngine.sink = playbackSink
+
+        _knownDevices.value = knownDevicesRepo.loadAll()
 
         addLog("Mode: 11btn+2trig | report=${HidDescriptor.REPORT_SIZE}B | throttle=${BluetoothHidManager.MIN_INTERVAL_MS}ms")
 
@@ -197,7 +287,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // ── Lifecycle ───────────────────────────────────────────────────────
+    // ── Lifecycle / Connection management ───────────────────────────────
 
     fun initializeBluetooth() {
         val result = hidManager.initialize()
@@ -214,6 +304,81 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     fun getBondedDevices(): List<BluetoothDevice> = hidManager.getBondedDevices()
     fun connectToDevice(device: BluetoothDevice) { hidManager.connectToHost(device) }
 
+    fun disconnectFromHost() {
+        userDisconnected = true
+        hidManager.disconnect()
+        addLog("BT_DISCONNECT: user requested")
+    }
+
+    fun connectToKnownDevice(address: String) {
+        userDisconnected = false
+        if (!hidManager.isProxyReady()) { addLog("Proxy not ready for connect"); return }
+        if (!hidManager.isRegistered) { addLog("Not registered, cannot connect"); return }
+        if (hidManager.isConnected) { addLog("Already connected"); return }
+        hidManager.connectToAddress(address)
+    }
+
+    fun removeKnownDevice(address: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            knownDevicesRepo.remove(address)
+            _knownDevices.value = knownDevicesRepo.loadAll()
+        }
+    }
+
+    fun refreshBondedDevices() {
+        _bondedDeviceInfo.value = hidManager.getBondedDeviceInfo()
+    }
+
+    /**
+     * Called from Activity.onResume. Syncs actual BT state with ViewModel
+     * and auto-recovers the connection chain if it was lost while in background.
+     */
+    fun recoverConnection() {
+        val btOk = hidManager.isBluetoothAvailable() && hidManager.isBluetoothEnabled()
+        _bluetoothAvailable.value = btOk
+
+        if (!btOk) {
+            addLog("BT_RESUME: Bluetooth not available — reinitializing")
+            pendingRecovery = !userDisconnected
+            hidManager.initialize()
+            return
+        }
+
+        if (!hidManager.isProxyReady()) {
+            addLog("BT_RESUME: proxy lost — reinitializing")
+            pendingRecovery = !userDisconnected
+            hidManager.initialize()
+            return
+        }
+        _proxyReady.value = true
+
+        if (!hidManager.isRegistered) {
+            addLog("BT_RESUME: registration lost — re-registering")
+            pendingRecovery = !userDisconnected
+            registerHidApp()
+            return
+        }
+        _isRegistered.value = true
+
+        _isConnected.value = hidManager.isConnected
+        if (hidManager.isConnected) {
+            addLog("BT_RESUME: still connected")
+            return
+        }
+
+        if (!userDisconnected) {
+            val lastDevice = knownDevicesRepo.getLastUsed()
+            if (lastDevice != null) {
+                addLog("BT_RESUME: reconnecting to ${lastDevice.name}")
+                connectToKnownDevice(lastDevice.address)
+            } else {
+                addLog("BT_RESUME: registered, no known device to reconnect")
+            }
+        } else {
+            addLog("BT_RESUME: user-disconnected, not reconnecting")
+        }
+    }
+
     // ── Hardware gamepad event forwarding ─────────────────────────────
 
     fun processHardwareKeyEvent(event: KeyEvent): Boolean = hwManager.processKeyEvent(event)
@@ -221,8 +386,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     // ── Button controls ─────────────────────────────────────────────────
 
-    fun pressButton(button: Int, tag: String = "") {
-        if (recorder.isRecording && !tag.startsWith("[PB]")) recorder.recordButtonPress(button)
+    fun pressButton(button: Int, tag: String = "", hwEventTimeMs: Long = 0L) {
+        if (playbackEngine.isRunning && !tag.startsWith("[PB]")) return
+        if (recorder.isRecording && !tag.startsWith("[PB]")) recorder.recordButtonPress(button, hwEventTimeMs)
 
         val state = _gamepadState.value
         if (GamepadButtons.isDpad(button)) {
@@ -240,8 +406,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         sendForced("${tag}PRESS $name")
     }
 
-    fun releaseButton(button: Int, tag: String = "") {
-        if (recorder.isRecording && !tag.startsWith("[PB]")) recorder.recordButtonRelease(button)
+    fun releaseButton(button: Int, tag: String = "", hwEventTimeMs: Long = 0L) {
+        if (playbackEngine.isRunning && !tag.startsWith("[PB]")) return
+        if (recorder.isRecording && !tag.startsWith("[PB]")) recorder.recordButtonRelease(button, hwEventTimeMs)
 
         val state = _gamepadState.value
         if (GamepadButtons.isDpad(button)) {
@@ -272,8 +439,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     // ── Trigger controls ────────────────────────────────────────────────
 
-    fun setLeftTrigger(normalized: Float) {
-        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftTrigger(normalized)
+    fun setLeftTrigger(normalized: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
+        if (playbackEngine.isRunning && !fromPlayback) return
+        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftTrigger(normalized, hwEventTimeMs)
 
         val value = (normalized * TriggerDefaults.MAX).toInt()
             .coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX)
@@ -286,8 +454,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun setRightTrigger(normalized: Float) {
-        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightTrigger(normalized)
+    fun setRightTrigger(normalized: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
+        if (playbackEngine.isRunning && !fromPlayback) return
+        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightTrigger(normalized, hwEventTimeMs)
 
         val value = (normalized * TriggerDefaults.MAX).toInt()
             .coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX)
@@ -302,8 +471,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     // ── Axis controls ───────────────────────────────────────────────────
 
-    fun setLeftAxis(normalizedX: Float, normalizedY: Float) {
-        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftAxis(normalizedX, normalizedY)
+    fun setLeftAxis(normalizedX: Float, normalizedY: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
+        if (playbackEngine.isRunning && !fromPlayback) return
+        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftAxis(normalizedX, normalizedY, hwEventTimeMs)
 
         val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         val y = ((normalizedY + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
@@ -311,8 +481,9 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         sendThrottled()
     }
 
-    fun setRightAxis(normalizedX: Float, normalizedY: Float) {
-        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightAxis(normalizedX, normalizedY)
+    fun setRightAxis(normalizedX: Float, normalizedY: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
+        if (playbackEngine.isRunning && !fromPlayback) return
+        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightAxis(normalizedX, normalizedY, hwEventTimeMs)
 
         val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         val y = ((normalizedY + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
@@ -324,7 +495,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     fun startRecording() {
         if (recorder.isRecording || playbackEngine.isRunning) return
-        recorder.start()
+        val snap = captureSnapshot()
+        recorder.start(snap, hwBaseMs = SystemClock.uptimeMillis())
         _isRecording.value = true
         _recordingElapsedMs.value = 0L
         recordingTimerJob = viewModelScope.launch {
@@ -333,12 +505,27 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
                 delay(100)
             }
         }
-        addLog("REC_START")
+        addLog("REC_START snap=YES btn=0x${"%04X".format(snap.buttons)}")
+    }
+
+    private fun captureSnapshot(): GamepadSnapshot {
+        val s = _gamepadState.value
+        return GamepadSnapshot(
+            buttons = s.buttons,
+            dpad = s.dpad,
+            leftX = s.leftX.toFloat() / AxisDefaults.MAX.toFloat() * 2f - 1f,
+            leftY = s.leftY.toFloat() / AxisDefaults.MAX.toFloat() * 2f - 1f,
+            rightX = s.rightX.toFloat() / AxisDefaults.MAX.toFloat() * 2f - 1f,
+            rightY = s.rightY.toFloat() / AxisDefaults.MAX.toFloat() * 2f - 1f,
+            leftTrigger = s.leftTrigger.toFloat() / TriggerDefaults.MAX.toFloat(),
+            rightTrigger = s.rightTrigger.toFloat() / TriggerDefaults.MAX.toFloat()
+        )
     }
 
     fun stopRecording() {
         if (!recorder.isRecording) return
         val stats = recorder.statsString()
+        val snapshot = recorder.initialSnapshot
         val events = recorder.stop()
         _isRecording.value = false
         _recordingElapsedMs.value = 0L
@@ -357,7 +544,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             name = "Recording $count",
             createdAt = System.currentTimeMillis(),
             durationMs = duration,
-            events = events
+            events = events,
+            initialSnapshot = snapshot
         )
         viewModelScope.launch(Dispatchers.IO) {
             recordingRepo.save(data)

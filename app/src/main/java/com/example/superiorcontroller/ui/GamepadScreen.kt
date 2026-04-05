@@ -53,6 +53,7 @@ import com.example.superiorcontroller.ui.components.BumperRow
 import com.example.superiorcontroller.ui.components.ControlButton
 import com.example.superiorcontroller.ui.components.DPad
 import com.example.superiorcontroller.ui.components.DebugLog
+import com.example.superiorcontroller.ui.components.DeviceSelectorSheet
 import com.example.superiorcontroller.ui.components.GamepadTrigger
 import com.example.superiorcontroller.ui.components.MenuButtons
 import com.example.superiorcontroller.ui.components.PlaybackBar
@@ -564,6 +565,11 @@ private fun ConnectionButtons(
     onMakeDiscoverable: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val knownDevices by viewModel.knownDevices.collectAsState()
+    val bondedDevices by viewModel.bondedDeviceInfo.collectAsState()
+    val lastKnown = knownDevices.firstOrNull()
+    var showDeviceSelector by remember { mutableStateOf(false) }
+
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (!permissionsGranted) {
             Button(onClick = onRequestPermissions) {
@@ -583,15 +589,58 @@ private fun ConnectionButtons(
             ) { Text(stringResource(R.string.btn_register_hid), fontSize = 11.sp) }
         }
         if (isRegistered && !isConnected) {
+            if (lastKnown != null) {
+                Button(
+                    onClick = { viewModel.connectToKnownDevice(lastKnown.address) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
+                ) {
+                    Text(
+                        "↻ ${lastKnown.name}",
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+            OutlinedButton(onClick = {
+                viewModel.refreshBondedDevices()
+                showDeviceSelector = true
+            }) {
+                Text(stringResource(R.string.btn_devices), fontSize = 11.sp)
+            }
             Button(
                 onClick = onMakeDiscoverable,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
             ) { Text(stringResource(R.string.btn_discoverable), fontSize = 11.sp) }
+        }
+        if (isConnected) {
+            Button(
+                onClick = { viewModel.disconnectFromHost() },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+            ) { Text(stringResource(R.string.btn_disconnect), fontSize = 11.sp) }
         }
         if (isRegistered) {
             OutlinedButton(onClick = { viewModel.unregisterHidApp() }) {
                 Text(stringResource(R.string.btn_unregister), fontSize = 11.sp)
             }
         }
+    }
+
+    if (showDeviceSelector) {
+        DeviceSelectorSheet(
+            knownDevices = knownDevices,
+            bondedDevices = bondedDevices,
+            connectedAddress = null,
+            onConnect = { address ->
+                viewModel.connectToKnownDevice(address)
+                showDeviceSelector = false
+            },
+            onRemoveKnown = { viewModel.removeKnownDevice(it) },
+            onMakeDiscoverable = {
+                onMakeDiscoverable()
+                showDeviceSelector = false
+            },
+            onDismiss = { showDeviceSelector = false }
+        )
     }
 }

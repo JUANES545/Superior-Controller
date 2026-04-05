@@ -16,6 +16,17 @@
     <string name="btn_register_hid">Register HID</string>
     <string name="btn_discoverable">Discoverable</string>
     <string name="btn_unregister">Unregister</string>
+    <string name="btn_disconnect">Disconnect</string>
+    <string name="btn_devices">Devices</string>
+
+    <!-- Device selector -->
+    <string name="devices_title">Devices</string>
+    <string name="devices_saved">Saved Devices</string>
+    <string name="devices_paired">Paired Devices</string>
+    <string name="devices_empty">No devices available. Use Discoverable to let a PC find you.</string>
+    <string name="devices_connect">Connect</string>
+    <string name="devices_remove">Remove</string>
+    <string name="devices_connected_label">Connected</string>
 
     <!-- Gamepad controls -->
     <string name="btn_send_neutral">Neutral</string>

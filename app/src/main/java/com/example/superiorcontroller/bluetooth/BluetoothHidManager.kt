@@ -128,6 +128,10 @@ class BluetoothHidManager(private val context: Context) {
     fun isProxyReady(): Boolean = hidDevice != null
 
     fun initialize(): Boolean {
+        if (hidDevice != null) {
+            listener?.onLog("Proxy already available — skipping init")
+            return true
+        }
         val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         bluetoothAdapter = manager?.adapter
         if (bluetoothAdapter == null) {
@@ -224,6 +228,9 @@ class BluetoothHidManager(private val context: Context) {
 
     fun getBondedDevices(): List<BluetoothDevice> = bluetoothAdapter?.bondedDevices?.toList() ?: emptyList()
 
+    fun getBondedDeviceInfo(): List<Pair<String, String>> =
+        bluetoothAdapter?.bondedDevices?.map { (it.name ?: it.address) to it.address } ?: emptyList()
+
     fun connectToHost(device: BluetoothDevice): Boolean {
         val hid = hidDevice ?: return false
         val result = hid.connect(device)
@@ -231,9 +238,31 @@ class BluetoothHidManager(private val context: Context) {
         return result
     }
 
+    fun connectToAddress(address: String): Boolean {
+        val adapter = bluetoothAdapter ?: run {
+            listener?.onLog("ERROR: adapter null for connectToAddress")
+            return false
+        }
+        val hid = hidDevice ?: run {
+            listener?.onLog("ERROR: proxy null for connectToAddress")
+            return false
+        }
+        return try {
+            val device = adapter.getRemoteDevice(address)
+            val result = hid.connect(device)
+            listener?.onLog("connectToAddress($address) = $result")
+            result
+        } catch (e: IllegalArgumentException) {
+            listener?.onLog("ERROR: invalid address $address")
+            false
+        }
+    }
+
     fun disconnect() {
         hostDevice?.let { hidDevice?.disconnect(it); listener?.onLog("disconnect() called") }
     }
+
+    fun connectedHostAddress(): String? = if (_isConnected) hostDevice?.address else null
 
     fun cleanup() {
         handler.removeCallbacks(deferredSendRunnable)
