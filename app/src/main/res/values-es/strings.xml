@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Superior Controller</string>
+
+    <!-- Status panel -->
+    <string name="status_title">ESTADO</string>
+    <string name="status_bluetooth">Bluetooth</string>
+    <string name="status_hid_reg">Reg. HID</string>
+    <string name="status_host">Host</string>
+    <string name="status_connected">Conectado: %1$s</string>
+    <string name="status_reports_sent">Reportes: %1$d</string>
+
+    <!-- Connection buttons -->
+    <string name="btn_grant_permissions">Otorgar permisos Bluetooth</string>
+    <string name="btn_initialize_bt">Iniciar BT</string>
+    <string name="btn_register_hid">Registrar HID</string>
+    <string name="btn_discoverable">Visible</string>
+    <string name="btn_unregister">Desregistrar</string>
+    <string name="btn_disconnect">Desconectar</string>
+    <string name="btn_devices">Dispositivos</string>
+
+    <!-- Device selector -->
+    <string name="devices_title">Dispositivos</string>
+    <string name="devices_saved">Dispositivos guardados</string>
+    <string name="devices_paired">Dispositivos emparejados</string>
+    <string name="devices_empty">No hay dispositivos disponibles. Usa Visible para que un PC te encuentre.</string>
+    <string name="devices_connect">Conectar</string>
+    <string name="devices_remove">Eliminar</string>
+    <string name="devices_rename">Renombrar</string>
+    <string name="devices_alias_hint">Alias del dispositivo</string>
+    <string name="devices_connected_label">Conectado</string>
+    <string name="status_not_connected">No conectado</string>
+    <string name="status_no_host">Sin host ▸</string>
+    <string name="status_hw_controller">Controlador</string>
+
+    <!-- Gamepad controls -->
+    <string name="btn_send_neutral">Neutral</string>
+    <string name="btn_clear_log">Limpiar Log</string>
+    <string name="label_back">ATRÁS</string>
+    <string name="label_start">INICIO</string>
+    <string name="label_left_stick">L</string>
+    <string name="label_right_stick">R</string>
+    <string name="label_home">Inicio</string>
+
+    <!-- Debug -->
+    <string name="debug_log_title">LOG DE DEPURACIÓN</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Configuración</string>
+    <string name="settings_haptics_title">Vibración de botones</string>
+    <string name="settings_haptics_desc">Vibrar al presionar botones</string>
+    <string name="settings_sound_title">Sonido de botones</string>
+    <string name="settings_sound_desc">Reproducir sonido al presionar botones</string>
+    <string name="settings_trigger_mode_title">Interacción de gatillos</string>
+    <string name="settings_trigger_mode_desc">Elegir cómo responden LT y RT en pantalla</string>
+    <string name="settings_trigger_analog">Analógico</string>
+    <string name="settings_trigger_button">Botón</string>
+    <string name="settings_debug_log_title">Log de depuración</string>
+    <string name="settings_debug_log_desc">Mostrar la consola de depuración en pantalla</string>
+
+    <!-- Recording / Playback -->
+    <string name="recordings_title">Grabaciones</string>
+    <string name="recordings_empty">Sin grabaciones aún</string>
+    <string name="recording_delete">Eliminar</string>
+    <string name="recording_delete_confirm">¿Eliminar esta grabación?</string>
+    <string name="recording_rename">Renombrar</string>
+    <string name="dialog_cancel">Cancelar</string>
+    <string name="dialog_ok">Aceptar</string>
+</resources>
