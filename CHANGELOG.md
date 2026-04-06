@@ -5,20 +5,25 @@ All notable changes to Superior Controller will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.7.0] - 2026-04-06
 
 ### Added
 - HID report recording in digital frame format (binary capture of raw reports)
 - HID report playback engine with nanosecond-precision timing
 - Input quantizer for deduplicating redundant axis/trigger events
+- Temporal quantizer with assist tempo for left and right inputs
+- Assist tempo settings (configurable left/right tempo intervals)
+- Profile suggestion dialog when a new Bluetooth device connects
 - Onboarding screen for first-time users
+- About section in Settings
 - Digital recording settings in Settings sheet (frame format toggle)
 - Spanish localization (`values-es/strings.xml`)
 
 ### Changed
 - Enhanced recording repository to support both event-based and frame-based recordings
-- Expanded SettingsRepository with digital recording preferences
+- Expanded SettingsRepository with digital recording and tempo preferences
 - Refactored GamepadViewModel for dual recording/playback modes
+- Improved device handling to suggest controller profiles on connection
 
 ## [1.6.0] - 2026-04-04
 
@@ -104,7 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MVVM architecture with StateFlow
 - README with project documentation and APK download link
 
-[Unreleased]: https://github.com/JUANES545/Superior-Controller/compare/v1.6.0...HEAD
+[1.7.0]: https://github.com/JUANES545/Superior-Controller/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/JUANES545/Superior-Controller/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/JUANES545/Superior-Controller/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/JUANES545/Superior-Controller/compare/v1.3.0...v1.4.0

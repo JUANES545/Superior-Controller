@@ -17,11 +17,19 @@ Superior Controller is a native Android application that transforms your smartph
 ## Features
 
 - **Bluetooth HID Gamepad** — Registers as a standard HID device, recognized natively by Windows, Linux, macOS, and other Bluetooth hosts.
-- **8 Digital Buttons** — A, B, X, Y, L1, R1, Select, Start mapped to HID buttons 1–8.
-- **D-Pad with Diagonals** — Full 8-direction hat switch (N, NE, E, SE, S, SW, W, NW) using the standard POV encoding.
-- **Analog Joystick** — Virtual thumbstick with X/Y axes (0–255 range, center at 128).
-- **Real-time HID Reports** — 4-byte reports sent over Bluetooth with minimal latency.
-- **Debug Console** — Built-in log viewer showing HID reports in hex/binary, connection events, and button states in real time.
+- **11 Digital Buttons + 2 Analog Triggers** — A, B, X, Y, LB, RB, Back, Start, L3, R3, Home + L2/R2 triggers.
+- **D-Pad with Diagonals** — Full 8-direction hat switch (N, NE, E, SE, S, SW, W, NW) using standard POV encoding.
+- **Dual Analog Joysticks** — Left and right virtual thumbsticks with X/Y axes (0–255).
+- **Controller Profiles** — Switch between Xbox and PlayStation button layouts.
+- **Hardware Gamepad Pass-through** — Connect a physical USB/BT controller and relay inputs over Bluetooth HID.
+- **Input Recording & Playback** — Record gamepad sessions and replay them with nanosecond-precision timing. Supports both event-based and digital frame formats.
+- **Assist Tempo** — Configurable temporal quantization for left/right inputs.
+- **Device Management** — Save, rename, and quick-connect to known Bluetooth hosts.
+- **Foreground Service** — Persistent Bluetooth connection that survives Activity lifecycle.
+- **Debug Console** — Real-time log viewer with overlay mode, hex/binary HID report visualization.
+- **Haptic & Sound Feedback** — Configurable vibration and click sounds on button press.
+- **Onboarding** — First-time setup guide for new users.
+- **Spanish Localization** — Full `es` translation.
 - **No Root Required** — Uses the official Android `BluetoothHidDevice` API (API 28+).
 
 ## Requirements
@@ -45,29 +53,49 @@ Superior Controller is a native Android application that transforms your smartph
 
 ```
 com.example.superiorcontroller
-├── MainActivity.kt                  # Entry point, permissions handling
+├── MainActivity.kt                  # Entry point, permissions, hardware event dispatch
 ├── bluetooth/
-│   └── BluetoothHidManager.kt       # Bluetooth HID Device profile lifecycle
+│   ├── BluetoothHidManager.kt       # Bluetooth HID Device profile lifecycle
+│   ├── KnownDevice.kt              # Saved device model
+│   └── KnownDevicesRepository.kt   # Persistent known-devices storage
 ├── hid/
-│   ├── HidDescriptor.kt             # USB HID Report Descriptor (4-byte gamepad)
-│   ├── GamepadConstants.kt          # Button bitmasks, hat switch values, axis defaults
+│   ├── HidDescriptor.kt             # USB HID Report Descriptor
+│   ├── GamepadConstants.kt          # Button bitmasks, hat switch, axis/trigger defaults
 │   ├── GamepadState.kt              # Immutable gamepad state snapshot
-│   └── GamepadReportBuilder.kt      # Builds 4-byte HID reports from state
+│   └── GamepadReportBuilder.kt      # Builds HID reports from state
+├── input/
+│   ├── HardwareGamepadManager.kt    # Physical controller event processing
+│   ├── InputQuantizer.kt            # Deduplicates redundant axis/trigger events
+│   └── TemporalQuantizer.kt         # Assist tempo quantization
+├── recording/
+│   ├── InputRecorder.kt             # Event-based session recorder
+│   ├── HidReportRecorder.kt         # Digital frame-based recorder
+│   ├── PlaybackEngine.kt            # Event playback with timing
+│   ├── HidReportPlaybackEngine.kt   # Frame playback with nanosecond precision
+│   ├── RecordedEvent.kt             # Event/snapshot/meta data models
+│   ├── HidReportFrame.kt            # Frame data model
+│   └── RecordingRepository.kt       # Persistent recording storage
+├── settings/
+│   └── SettingsRepository.kt        # DataStore-backed preferences
 ├── viewmodel/
-│   └── GamepadViewModel.kt          # MVVM ViewModel, bridges UI ↔ Bluetooth
+│   └── GamepadViewModel.kt          # MVVM ViewModel, bridges UI ↔ BT ↔ Recording
 └── ui/
-    ├── GamepadScreen.kt             # Main screen layout (Compose)
-    ├── components/
-    │   ├── ActionButtons.kt         # A, B, X, Y face buttons
-    │   ├── DPad.kt                  # 8-direction D-Pad
-    │   ├── ShoulderButtons.kt       # L1 / R1 triggers
-    │   ├── VirtualJoystick.kt       # Analog thumbstick with touch tracking
-    │   ├── StatusPanel.kt           # Connection status indicators
-    │   └── DebugLog.kt              # Real-time HID report log viewer
-    └── theme/
-        ├── Color.kt
-        ├── Theme.kt
-        └── Type.kt
+    ├── GamepadScreen.kt             # Main gamepad layout (Compose)
+    ├── OnboardingScreen.kt          # First-time user guide
+    └── components/
+        ├── ActionButtons.kt         # A, B, X, Y face buttons
+        ├── DPad.kt                  # 8-direction D-Pad
+        ├── ShoulderButtons.kt       # LB / RB shoulder buttons
+        ├── VirtualJoystick.kt       # Analog thumbstick with touch tracking
+        ├── StatusPanel.kt           # Connection status indicators
+        ├── DebugLog.kt              # Real-time HID report log (inline + overlay)
+        ├── DeviceSelectorSheet.kt   # Known device manager
+        ├── RecordButton.kt          # Record toggle with timer
+        ├── RecordingsSheet.kt       # Recording list management
+        ├── PlaybackBar.kt           # Playback controls
+        ├── SettingsSheet.kt         # App settings + profiles + about
+        ├── ButtonHaptics.kt         # Vibration feedback
+        └── ButtonSoundPlayer.kt     # Audio feedback
 ```
 
 ### Design Decisions
@@ -77,21 +105,17 @@ com.example.superiorcontroller
 | **UI** | Jetpack Compose + Material 3 | Declarative, reactive gamepad interface |
 | **State** | Kotlin `StateFlow` + MVVM | Unidirectional data flow from inputs to Bluetooth |
 | **Bluetooth** | `BluetoothHidDevice` API | Native HID profile — no drivers needed on the host |
-| **HID Protocol** | Custom 4-byte descriptor | Maximizes compatibility with Windows `joy.cpl`, `gamepad-tester.com`, and generic HID drivers |
-
-### HID Report Format (4 bytes)
-
-```
-Byte 0: [A][B][X][Y][L1][R1][SEL][STA]   ← 8 button bits
-Byte 1: [Hat 0-8][----padding----]         ← D-Pad (low nibble) + 4-bit pad
-Byte 2: [X axis 0-255]                    ← Joystick horizontal
-Byte 3: [Y axis 0-255]                    ← Joystick vertical
-```
+| **HID Protocol** | Custom report descriptor | Maximizes compatibility with Windows, Linux, macOS HID drivers |
+| **Persistence** | DataStore + JSON files | Settings, known devices, and recordings survive app restarts |
+| **Recording** | Dual-mode (event + frame) | Event-based for editing, frame-based for exact reproduction |
 
 ### Data Flow
 
 ```
-Touch Input → Compose UI → GamepadViewModel → GamepadState → GamepadReportBuilder → BluetoothHidManager → Host Device
+Touch / Hardware Input → Compose UI / HardwareGamepadManager
+    → GamepadViewModel → GamepadState
+    → GamepadReportBuilder → BluetoothHidManager → Host Device
+                          ↘ InputRecorder / HidReportRecorder (if recording)
 ```
 
 ## Tech Stack
@@ -113,6 +137,10 @@ cd Superior-Controller
 ```
 
 The APK will be generated at `app/build/outputs/apk/release/app-release.apk`.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed version history.
 
 ## License
 
