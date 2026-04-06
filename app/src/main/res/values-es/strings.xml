@@ -76,6 +76,10 @@
     <string name="settings_title">Configuración</string>
     <string name="settings_profile_title">Perfil de control</string>
     <string name="settings_profile_desc">Cambia el descriptor HID y las etiquetas de botones</string>
+    <string name="profile_change_title">¿Cambiar perfil de control?</string>
+    <string name="profile_change_body">Para que el cambio se aplique correctamente, se recomienda \"Olvidar\" a Superior Controller en el dispositivo receptor (PC, tablet, etc.) y volver a emparejar.\n\nAlgunos juegos como Genshin Impact funcionan mejor con el perfil PlayStation.</string>
+    <string name="profile_change_confirm">Cambiar perfil</string>
+
     <string name="settings_haptics_title">Vibración de botones</string>
     <string name="settings_haptics_desc">Vibrar al presionar botones</string>
     <string name="settings_sound_title">Sonido de botones</string>
@@ -84,6 +88,30 @@
     <string name="settings_trigger_mode_desc">Elegir cómo responden LT y RT en pantalla</string>
     <string name="settings_trigger_analog">Analógico</string>
     <string name="settings_trigger_button">Botón</string>
+    <string name="settings_digital_rec_title">Grabación asistida</string>
+    <string name="settings_digital_rec_desc">Simplifica sticks y triggers para grabaciones más consistentes</string>
+    <string name="settings_digital_rec_info">Cuando está activado, los sticks y triggers se simplifican a valores discretos mientras grabas.\n\nLos sticks se ajustan a direcciones configurables + neutral, y los triggers se vuelven binarios.\n\nLa precisión se reduce, pero las grabaciones se reproducen de forma mucho más consistente — ideal para rutinas repetibles.\n\nToca el ícono de tuerca para ajustar cada stick.\n\nSolo aplica mientras estás grabando activamente.</string>
+    <string name="digital_rec_badge">ASSIST</string>
+
+    <!-- Configuración avanzada de asistida -->
+    <string name="assist_config_title">Grabación asistida — Ajustes</string>
+    <string name="assist_left_stick_title">Stick izquierdo (movimiento)</string>
+    <string name="assist_right_stick_title">Stick derecho (cámara)</string>
+    <string name="assist_mode_8dir">8 dir</string>
+    <string name="assist_mode_4dir">4 dir</string>
+    <string name="assist_mode_stable75">75%</string>
+    <string name="assist_mode_stable50">50%</string>
+    <string name="assist_left_8dir_label">8 direcciones</string>
+    <string name="assist_left_4dir_label">4 direcciones</string>
+    <string name="assist_hint_8dir">Más flexible, menos estable</string>
+    <string name="assist_hint_4dir">Sin diagonales, más rígido</string>
+    <string name="assist_hint_stable75">Equilibrio entre control y reproducibilidad</string>
+    <string name="assist_hint_stable50">Máxima reproducibilidad, movimiento más lento</string>
+    <string name="assist_recommended">(recomendado)</string>
+    <string name="macro_warning_title">Grabación asistida</string>
+    <string name="macro_warning_body">Los sticks y triggers se simplificarán a valores digitales.\n\nEl control será menos preciso, pero las grabaciones se reproducirán de forma mucho más consistente.</string>
+    <string name="macro_warning_accept">Iniciar grabación</string>
+    <string name="macro_warning_suppress">No volver a mostrar</string>
     <string name="settings_debug_log_title">Log de depuración</string>
     <string name="settings_debug_log_desc">Mostrar la consola de depuración en pantalla</string>
     <string name="settings_debug_overlay_title">Vista en capas</string>
@@ -97,6 +125,27 @@
     <string name="recording_rename">Renombrar</string>
     <string name="dialog_cancel">Cancelar</string>
     <string name="dialog_ok">Aceptar</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_skip">Saltar</string>
+    <string name="onboarding_next">Siguiente</string>
+    <string name="onboarding_back">Atrás</string>
+    <string name="onboarding_start">Empezar</string>
+
+    <string name="onboarding_1_title">Tu teléfono, tu control</string>
+    <string name="onboarding_1_body">Convierte tu teléfono en un control inalámbrico para PCs, tablets y otros dispositivos compatibles por Bluetooth.</string>
+
+    <string name="onboarding_2_title">Juega a tu manera</string>
+    <string name="onboarding_2_body">Usa los controles virtuales en pantalla o conecta un control físico por cable USB para una experiencia más cómoda.</string>
+
+    <string name="onboarding_3_title">Graba y reproduce</string>
+    <string name="onboarding_3_body">Captura rutinas de juego y reprodúcelas después. Activa la Grabación asistida para resultados más consistentes.</string>
+
+    <string name="onboarding_4_title">Sobre el Bluetooth</string>
+    <string name="onboarding_4_body">Mientras actúes como control inalámbrico, los mandos Bluetooth conectados a tu teléfono se desconectarán.\n\nPara grabar con un control físico, conéctalo por cable USB.</string>
+
+    <string name="onboarding_5_title">Listo para empezar</string>
+    <string name="onboarding_5_body">Concede los permisos Bluetooth cuando se soliciten y empieza a jugar. Puedes ajustar todo desde Configuración.</string>
 
     <!-- Notificación del servicio -->
     <string name="notif_channel_name">Control HID</string>

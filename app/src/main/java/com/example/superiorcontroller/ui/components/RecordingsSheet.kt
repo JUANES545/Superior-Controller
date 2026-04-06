@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.superiorcontroller.R
+import com.example.superiorcontroller.recording.HidRecordingMeta
 import com.example.superiorcontroller.recording.PlaybackProgress
 import com.example.superiorcontroller.recording.PlaybackStatus
 import com.example.superiorcontroller.recording.RecordingMeta
@@ -63,10 +64,31 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+data class UnifiedRecording(
+    val id: String,
+    val name: String,
+    val createdAt: Long,
+    val durationMs: Long,
+    val eventCount: Int,
+    val isHidRaw: Boolean
+) {
+    companion object {
+        fun from(meta: RecordingMeta) = UnifiedRecording(
+            id = meta.id, name = meta.name, createdAt = meta.createdAt,
+            durationMs = meta.durationMs, eventCount = meta.eventCount, isHidRaw = false
+        )
+        fun from(meta: HidRecordingMeta) = UnifiedRecording(
+            id = meta.id, name = meta.name, createdAt = meta.createdAt,
+            durationMs = meta.durationMs, eventCount = meta.frameCount, isHidRaw = true
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecordingsSheet(
     recordings: List<RecordingMeta>,
+    hidRecordings: List<HidRecordingMeta>,
     playbackProgress: PlaybackProgress,
     onPlay: (String) -> Unit,
     onPause: () -> Unit,
@@ -76,6 +98,12 @@ fun RecordingsSheet(
     onRename: (String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val unified = remember(recordings, hidRecordings) {
+        (hidRecordings.map { UnifiedRecording.from(it) } +
+         recordings.map { UnifiedRecording.from(it) })
+            .sortedByDescending { it.createdAt }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -91,13 +119,13 @@ fun RecordingsSheet(
             )
             Spacer(Modifier.height(12.dp))
 
-            if (recordings.isEmpty()) {
+            if (unified.isEmpty()) {
                 Text(
                     stringResource(R.string.recordings_empty),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                recordings.forEachIndexed { index, rec ->
+                unified.forEachIndexed { index, rec ->
                     RecordingRow(
                         recording = rec,
                         playbackProgress = if (playbackProgress.recordingId == rec.id) playbackProgress else null,
@@ -108,7 +136,7 @@ fun RecordingsSheet(
                         onDelete = { onDelete(rec.id) },
                         onRename = { newName -> onRename(rec.id, newName) }
                     )
-                    if (index < recordings.size - 1) {
+                    if (index < unified.size - 1) {
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 4.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
@@ -123,7 +151,7 @@ fun RecordingsSheet(
 
 @Composable
 private fun RecordingRow(
-    recording: RecordingMeta,
+    recording: UnifiedRecording,
     playbackProgress: PlaybackProgress?,
     onPlay: () -> Unit,
     onPause: () -> Unit,
@@ -208,12 +236,23 @@ private fun RecordingRow(
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    val countLabel = if (recording.isHidRaw) "${recording.eventCount} frames" else "${recording.eventCount} events"
+                    val countColor = if (recording.isHidRaw) Color(0xFF00BFA5) else MaterialTheme.colorScheme.primary
                     Text(
-                        "${recording.eventCount} events",
+                        countLabel,
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = countColor,
                         fontWeight = FontWeight.Medium
                     )
+                    if (recording.isHidRaw) {
+                        Spacer(Modifier.width(4.dp))
+                        Text("HID", fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                            color = Color(0xFF00BFA5),
+                            modifier = Modifier
+                                .background(Color(0xFF00BFA5).copy(alpha = 0.12f), RoundedCornerShape(3.dp))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
                 }
             }
 
