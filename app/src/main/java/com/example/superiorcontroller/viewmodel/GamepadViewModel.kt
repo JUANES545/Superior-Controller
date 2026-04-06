@@ -112,6 +112,15 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     val assistLeftMode: StateFlow<String> = _assistLeftMode.asStateFlow()
     private val _assistRightMode = MutableStateFlow(SettingsRepository.ASSIST_STABLE75)
     val assistRightMode: StateFlow<String> = _assistRightMode.asStateFlow()
+    private val _assistLeftTempo = MutableStateFlow(SettingsRepository.TEMPO_GRID)
+    val assistLeftTempo: StateFlow<String> = _assistLeftTempo.asStateFlow()
+    private val _assistRightTempo = MutableStateFlow(SettingsRepository.TEMPO_PULSE)
+    val assistRightTempo: StateFlow<String> = _assistRightTempo.asStateFlow()
+
+    private val temporalQuantizer = com.example.superiorcontroller.input.TemporalQuantizer(viewModelScope).also { tq ->
+        tq.onCommitLeft = { x, y -> applyLeftAxis(x, y) }
+        tq.onCommitRight = { x, y -> applyRightAxis(x, y) }
+    }
 
     private val _profileWarningSuppressed = MutableStateFlow(false)
     val profileWarningSuppressed: StateFlow<Boolean> = _profileWarningSuppressed.asStateFlow()
@@ -457,6 +466,12 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             settingsRepo.assistRightMode.collect { mode -> _assistRightMode.value = mode }
         }
         viewModelScope.launch {
+            settingsRepo.assistLeftTempo.collect { mode -> _assistLeftTempo.value = mode }
+        }
+        viewModelScope.launch {
+            settingsRepo.assistRightTempo.collect { mode -> _assistRightTempo.value = mode }
+        }
+        viewModelScope.launch {
             settingsRepo.profileWarningSuppressed.collect { _profileWarningSuppressed.value = it }
         }
         viewModelScope.launch {
@@ -782,8 +797,17 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         val (qx, qy) = if (shouldQuantize && !fromPlayback)
             InputQuantizer.quantizeStick(normalizedX, normalizedY, _assistLeftMode.value)
         else normalizedX to normalizedY
-        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftAxis(qx, qy, hwEventTimeMs)
 
+        if (shouldQuantize && !fromPlayback && temporalQuantizer.isActive
+            && temporalQuantizer.leftMode != com.example.superiorcontroller.input.TemporalQuantizer.MODE_FREE) {
+            temporalQuantizer.feedLeft(qx, qy)
+            return
+        }
+        applyLeftAxis(qx, qy, fromPlayback)
+    }
+
+    private fun applyLeftAxis(qx: Float, qy: Float, fromPlayback: Boolean = false) {
+        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftAxis(qx, qy, 0L)
         val x = ((qx + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         val y = ((qy + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         _gamepadState.value = _gamepadState.value.withLeftAxis(x, y)
@@ -795,8 +819,17 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         val (qx, qy) = if (shouldQuantize && !fromPlayback)
             InputQuantizer.quantizeStick(normalizedX, normalizedY, _assistRightMode.value)
         else normalizedX to normalizedY
-        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightAxis(qx, qy, hwEventTimeMs)
 
+        if (shouldQuantize && !fromPlayback && temporalQuantizer.isActive
+            && temporalQuantizer.rightMode != com.example.superiorcontroller.input.TemporalQuantizer.MODE_FREE) {
+            temporalQuantizer.feedRight(qx, qy)
+            return
+        }
+        applyRightAxis(qx, qy, fromPlayback)
+    }
+
+    private fun applyRightAxis(qx: Float, qy: Float, fromPlayback: Boolean = false) {
+        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightAxis(qx, qy, 0L)
         val x = ((qx + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         val y = ((qy + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         _gamepadState.value = _gamepadState.value.withRightAxis(x, y)
@@ -836,6 +869,13 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         hidManager.reportCaptureListener = { report, sendTimeNs ->
             hidReportRecorder.captureFrame(report, sendTimeNs)
         }
+        if (_digitalRecording.value) {
+            temporalQuantizer.leftMode = _assistLeftTempo.value
+            temporalQuantizer.rightMode = _assistRightTempo.value
+            val needsTemporal = temporalQuantizer.leftMode != com.example.superiorcontroller.input.TemporalQuantizer.MODE_FREE
+                    || temporalQuantizer.rightMode != com.example.superiorcontroller.input.TemporalQuantizer.MODE_FREE
+            if (needsTemporal) temporalQuantizer.start()
+        }
         _isRecording.value = true
         _recordingElapsedMs.value = 0L
         recordingTimerJob = viewModelScope.launch {
@@ -845,11 +885,13 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         val digi = if (_digitalRecording.value) " DIGITAL_MODE" else ""
-        addLog("HID_REC_START: capturing raw HID reports (profile=${_controllerProfile.value}$digi)")
+        val tempo = if (temporalQuantizer.isActive) " tempo:L=${temporalQuantizer.leftMode},R=${temporalQuantizer.rightMode}" else ""
+        addLog("HID_REC_START: capturing raw HID reports (profile=${_controllerProfile.value}$digi$tempo)")
     }
 
     fun stopRecording() {
         if (!hidReportRecorder.isRecording) return
+        temporalQuantizer.stop()
         hidManager.reportCaptureListener = null
         val frames = hidReportRecorder.stop()
         _isRecording.value = false
@@ -1113,6 +1155,14 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     fun setAssistRightMode(mode: String) {
         viewModelScope.launch { settingsRepo.setAssistRightMode(mode) }
+    }
+
+    fun setAssistLeftTempo(mode: String) {
+        viewModelScope.launch { settingsRepo.setAssistLeftTempo(mode) }
+    }
+
+    fun setAssistRightTempo(mode: String) {
+        viewModelScope.launch { settingsRepo.setAssistRightTempo(mode) }
     }
 
     fun setProfileWarningSuppressed(suppressed: Boolean) {

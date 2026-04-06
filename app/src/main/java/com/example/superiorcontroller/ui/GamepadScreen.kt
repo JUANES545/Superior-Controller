@@ -118,6 +118,8 @@ fun GamepadScreen(
     val digitalRecording by viewModel.digitalRecording.collectAsState()
     val assistLeftMode by viewModel.assistLeftMode.collectAsState()
     val assistRightMode by viewModel.assistRightMode.collectAsState()
+    val assistLeftTempo by viewModel.assistLeftTempo.collectAsState()
+    val assistRightTempo by viewModel.assistRightTempo.collectAsState()
     val profileWarningSuppressed by viewModel.profileWarningSuppressed.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
@@ -399,6 +401,8 @@ fun GamepadScreen(
             digitalRecording = digitalRecording,
             assistLeftMode = assistLeftMode,
             assistRightMode = assistRightMode,
+            assistLeftTempo = assistLeftTempo,
+            assistRightTempo = assistRightTempo,
             profileWarningSuppressed = profileWarningSuppressed,
             onProfileChange = { viewModel.setControllerProfile(it) },
             onProfileWarningSuppressed = { viewModel.setProfileWarningSuppressed(it) },
@@ -410,6 +414,8 @@ fun GamepadScreen(
             onToggleDigitalRecording = { viewModel.toggleDigitalRecording(it) },
             onAssistLeftModeChange = { viewModel.setAssistLeftMode(it) },
             onAssistRightModeChange = { viewModel.setAssistRightMode(it) },
+            onAssistLeftTempoChange = { viewModel.setAssistLeftTempo(it) },
+            onAssistRightTempoChange = { viewModel.setAssistRightTempo(it) },
             onDismiss = { showSettings = false }
         )
     }

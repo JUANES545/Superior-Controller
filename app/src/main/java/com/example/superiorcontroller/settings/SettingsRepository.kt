@@ -24,6 +24,8 @@ class SettingsRepository(context: Context) {
     private val _assistRightMode = MutableStateFlow(
         migrateRightMode(prefs.getString(Keys.ASSIST_RIGHT_MODE, ASSIST_STABLE75) ?: ASSIST_STABLE75)
     )
+    private val _assistLeftTempo = MutableStateFlow(prefs.getString(Keys.ASSIST_LEFT_TEMPO, TEMPO_GRID) ?: TEMPO_GRID)
+    private val _assistRightTempo = MutableStateFlow(prefs.getString(Keys.ASSIST_RIGHT_TEMPO, TEMPO_PULSE) ?: TEMPO_PULSE)
     private val _profileWarningSuppressed = MutableStateFlow(prefs.getBoolean(Keys.PROFILE_WARNING_SUPPRESSED, false))
     private val _onboardingCompleted = MutableStateFlow(
         if (prefs.contains(Keys.ONBOARDING_COMPLETED)) prefs.getBoolean(Keys.ONBOARDING_COMPLETED, false)
@@ -40,6 +42,8 @@ class SettingsRepository(context: Context) {
     val macroWarningSuppressed: Flow<Boolean> = _macroWarningSuppressed
     val assistLeftMode: Flow<String> = _assistLeftMode
     val assistRightMode: Flow<String> = _assistRightMode
+    val assistLeftTempo: Flow<String> = _assistLeftTempo
+    val assistRightTempo: Flow<String> = _assistRightTempo
     val profileWarningSuppressed: Flow<Boolean> = _profileWarningSuppressed
     val onboardingCompleted: Flow<Boolean> = _onboardingCompleted
 
@@ -93,6 +97,16 @@ class SettingsRepository(context: Context) {
         _assistRightMode.value = mode
     }
 
+    suspend fun setAssistLeftTempo(mode: String) {
+        withContext(Dispatchers.IO) { prefs.edit().putString(Keys.ASSIST_LEFT_TEMPO, mode).apply() }
+        _assistLeftTempo.value = mode
+    }
+
+    suspend fun setAssistRightTempo(mode: String) {
+        withContext(Dispatchers.IO) { prefs.edit().putString(Keys.ASSIST_RIGHT_TEMPO, mode).apply() }
+        _assistRightTempo.value = mode
+    }
+
     suspend fun setProfileWarningSuppressed(suppressed: Boolean) {
         withContext(Dispatchers.IO) { prefs.edit().putBoolean(Keys.PROFILE_WARNING_SUPPRESSED, suppressed).apply() }
         _profileWarningSuppressed.value = suppressed
@@ -114,6 +128,8 @@ class SettingsRepository(context: Context) {
         const val MACRO_WARNING_SUPPRESSED = "macro_warning_suppressed"
         const val ASSIST_LEFT_MODE = "assist_left_mode"
         const val ASSIST_RIGHT_MODE = "assist_right_mode"
+        const val ASSIST_LEFT_TEMPO = "assist_left_tempo"
+        const val ASSIST_RIGHT_TEMPO = "assist_right_tempo"
         const val PROFILE_WARNING_SUPPRESSED = "profile_warning_suppressed"
         const val ONBOARDING_COMPLETED = "onboarding_completed"
     }
@@ -127,6 +143,9 @@ class SettingsRepository(context: Context) {
         const val ASSIST_4DIR = "4dir"
         const val ASSIST_STABLE75 = "stable75"
         const val ASSIST_STABLE50 = "stable50"
+        const val TEMPO_FREE = "free"
+        const val TEMPO_GRID = "grid"
+        const val TEMPO_PULSE = "pulse"
 
         private fun migrateRightMode(stored: String): String = when (stored) {
             "precision" -> ASSIST_STABLE50

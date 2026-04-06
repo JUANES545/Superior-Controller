@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.superiorcontroller.R
 import com.example.superiorcontroller.input.InputQuantizer
+import com.example.superiorcontroller.input.TemporalQuantizer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +67,8 @@ fun SettingsSheet(
     digitalRecording: Boolean,
     assistLeftMode: String,
     assistRightMode: String,
+    assistLeftTempo: String,
+    assistRightTempo: String,
     profileWarningSuppressed: Boolean,
     onProfileChange: (String) -> Unit,
     onProfileWarningSuppressed: (Boolean) -> Unit,
@@ -77,6 +80,8 @@ fun SettingsSheet(
     onToggleDigitalRecording: (Boolean) -> Unit,
     onAssistLeftModeChange: (String) -> Unit,
     onAssistRightModeChange: (String) -> Unit,
+    onAssistLeftTempoChange: (String) -> Unit,
+    onAssistRightTempoChange: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var showAssistConfig by remember { mutableStateOf(false) }
@@ -247,8 +252,12 @@ fun SettingsSheet(
         AssistConfigDialog(
             leftMode = assistLeftMode,
             rightMode = assistRightMode,
+            leftTempo = assistLeftTempo,
+            rightTempo = assistRightTempo,
             onLeftModeChange = onAssistLeftModeChange,
             onRightModeChange = onAssistRightModeChange,
+            onLeftTempoChange = onAssistLeftTempoChange,
+            onRightTempoChange = onAssistRightTempoChange,
             onDismiss = { showAssistConfig = false }
         )
     }
@@ -269,8 +278,12 @@ fun SettingsSheet(
 private fun AssistConfigDialog(
     leftMode: String,
     rightMode: String,
+    leftTempo: String,
+    rightTempo: String,
     onLeftModeChange: (String) -> Unit,
     onRightModeChange: (String) -> Unit,
+    onLeftTempoChange: (String) -> Unit,
+    onRightTempoChange: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -297,7 +310,13 @@ private fun AssistConfigDialog(
                     text = stringResource(R.string.assist_left_stick_title),
                     style = MaterialTheme.typography.titleSmall
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.assist_section_direction),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
 
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     SegmentedButton(
@@ -316,14 +335,62 @@ private fun AssistConfigDialog(
                     }
                 }
 
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.assist_section_timing),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = leftTempo == TemporalQuantizer.MODE_FREE,
+                        onClick = { onLeftTempoChange(TemporalQuantizer.MODE_FREE) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        icon = {}
+                    ) {
+                        Text(stringResource(R.string.tempo_free), fontSize = 12.sp)
+                    }
+                    SegmentedButton(
+                        selected = leftTempo == TemporalQuantizer.MODE_GRID,
+                        onClick = { onLeftTempoChange(TemporalQuantizer.MODE_GRID) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        icon = {}
+                    ) {
+                        Text(stringResource(R.string.tempo_grid), fontSize = 12.sp)
+                    }
+                }
+
+                val leftTempoHint = when (leftTempo) {
+                    TemporalQuantizer.MODE_FREE -> stringResource(R.string.tempo_hint_free)
+                    TemporalQuantizer.MODE_GRID -> stringResource(R.string.tempo_hint_left_grid)
+                    else -> null
+                }
+                if (leftTempoHint != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(leftTempoHint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                }
+                if (leftTempo == TemporalQuantizer.MODE_GRID) {
+                    RecommendedBadge()
+                }
+
                 Spacer(Modifier.height(20.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(Modifier.height(16.dp))
 
                 // ── Right stick ──
                 Text(
                     text = stringResource(R.string.assist_right_stick_title),
                     style = MaterialTheme.typography.titleSmall
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.assist_section_direction),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
 
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                     val modes = listOf(
@@ -359,28 +426,47 @@ private fun AssistConfigDialog(
                     else -> null
                 }
                 if (rightHint != null) {
-                    Text(
-                        text = rightHint,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 11.sp
-                    )
+                    Text(rightHint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
                 }
 
-                if (rightMode == InputQuantizer.MODE_STABLE75) {
-                    Text(
-                        text = "★ ${stringResource(R.string.assist_recommended)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .padding(top = 2.dp)
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                                RoundedCornerShape(4.dp)
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.assist_section_timing),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    val tempoModes = listOf(
+                        TemporalQuantizer.MODE_FREE to R.string.tempo_free,
+                        TemporalQuantizer.MODE_GRID to R.string.tempo_grid,
+                        TemporalQuantizer.MODE_PULSE to R.string.tempo_pulse
                     )
+                    tempoModes.forEachIndexed { idx, (mode, labelRes) ->
+                        SegmentedButton(
+                            selected = rightTempo == mode,
+                            onClick = { onRightTempoChange(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(index = idx, count = tempoModes.size),
+                            icon = {}
+                        ) {
+                            Text(stringResource(labelRes), fontSize = 12.sp, maxLines = 1, textAlign = TextAlign.Center)
+                        }
+                    }
+                }
+
+                val rightTempoHint = when (rightTempo) {
+                    TemporalQuantizer.MODE_FREE -> stringResource(R.string.tempo_hint_free)
+                    TemporalQuantizer.MODE_GRID -> stringResource(R.string.tempo_hint_right_grid)
+                    TemporalQuantizer.MODE_PULSE -> stringResource(R.string.tempo_hint_pulse)
+                    else -> null
+                }
+                if (rightTempoHint != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(rightTempoHint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                }
+                if (rightTempo == TemporalQuantizer.MODE_PULSE) {
+                    RecommendedBadge()
                 }
 
                 Spacer(Modifier.height(24.dp))
@@ -532,6 +618,23 @@ private fun AboutDialog(onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun RecommendedBadge() {
+    Text(
+        text = "★ ${stringResource(R.string.assist_recommended)}",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .padding(top = 2.dp)
+            .background(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                RoundedCornerShape(4.dp)
+            )
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    )
 }
 
 private fun checkRoot(): Boolean {

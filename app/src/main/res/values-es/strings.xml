@@ -108,6 +108,15 @@
     <string name="assist_hint_stable75">Equilibrio entre control y reproducibilidad</string>
     <string name="assist_hint_stable50">Máxima reproducibilidad, movimiento más lento</string>
     <string name="assist_recommended">(recomendado)</string>
+    <string name="assist_section_direction">Dirección</string>
+    <string name="assist_section_timing">Tiempo</string>
+    <string name="tempo_free">Libre</string>
+    <string name="tempo_grid">Bloques</string>
+    <string name="tempo_pulse">Pulsos</string>
+    <string name="tempo_hint_free">Sin simplificación temporal</string>
+    <string name="tempo_hint_left_grid">Movimientos en bloques de ~50ms</string>
+    <string name="tempo_hint_right_grid">Cambios cada ~100ms</string>
+    <string name="tempo_hint_pulse">Pulsos discretos de cámara, más reproducible</string>
     <string name="macro_warning_title">Grabación asistida</string>
     <string name="macro_warning_body">Los sticks y triggers se simplificarán a valores digitales.\n\nEl control será menos preciso, pero las grabaciones se reproducirán de forma mucho más consistente.</string>
     <string name="macro_warning_accept">Iniciar grabación</string>
