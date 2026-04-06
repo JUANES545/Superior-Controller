@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.example.superiorcontroller.ui.GamepadScreen
+import com.example.superiorcontroller.ui.OnboardingScreen
 import com.example.superiorcontroller.ui.theme.SuperiorControllerTheme
 import com.example.superiorcontroller.viewmodel.GamepadViewModel
 
@@ -46,26 +48,32 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SuperiorControllerTheme {
-                var permissionsGranted by remember { mutableStateOf(hasBluetoothPermissions()) }
+                val onboardingDone by gamepadViewModel.onboardingCompleted.collectAsState()
 
-                val permissionLauncher = rememberLauncherForActivityResult(
-                    ActivityResultContracts.RequestMultiplePermissions()
-                ) { results ->
-                    permissionsGranted = results.values.all { it }
-                    if (permissionsGranted) gamepadViewModel.initializeBluetooth()
-                }
+                if (!onboardingDone) {
+                    OnboardingScreen(onFinished = { gamepadViewModel.completeOnboarding() })
+                } else {
+                    var permissionsGranted by remember { mutableStateOf(hasBluetoothPermissions()) }
 
-                LaunchedEffect(permissionsGranted) {
-                    if (permissionsGranted) gamepadViewModel.initializeBluetooth()
-                }
+                    val permissionLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestMultiplePermissions()
+                    ) { results ->
+                        permissionsGranted = results.values.all { it }
+                        if (permissionsGranted) gamepadViewModel.initializeBluetooth()
+                    }
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    GamepadScreen(
-                        viewModel = gamepadViewModel,
-                        permissionsGranted = permissionsGranted,
-                        onRequestPermissions = { permissionLauncher.launch(bluetoothPermissions()) },
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                    LaunchedEffect(permissionsGranted) {
+                        if (permissionsGranted) gamepadViewModel.initializeBluetooth()
+                    }
+
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        GamepadScreen(
+                            viewModel = gamepadViewModel,
+                            permissionsGranted = permissionsGranted,
+                            onRequestPermissions = { permissionLauncher.launch(bluetoothPermissions()) },
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
                 }
             }
         }

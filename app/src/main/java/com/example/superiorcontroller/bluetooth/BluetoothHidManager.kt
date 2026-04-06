@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
+import android.bluetooth.BluetoothHidDeviceAppQosSettings
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
@@ -29,6 +30,12 @@ class BluetoothHidManager(private val context: Context) {
 
     var psProfile: Boolean = false
 
+    /**
+     * Called on every successful HID send with the exact report bytes and
+     * wall-clock nanoTime. Set by ViewModel when recording is active.
+     */
+    var reportCaptureListener: ((report: ByteArray, sendTimeNs: Long) -> Unit)? = null
+
     // ── Rate limiting ────────────────────────────────────────────────────
     private var lastSentReport: ByteArray? = null
     private var lastSendTimeNs: Long = 0
@@ -51,6 +58,13 @@ class BluetoothHidManager(private val context: Context) {
 
     companion object {
         const val MIN_INTERVAL_MS = 8L
+
+        // L2CAP QoS: 9-byte reports at 125Hz = 1125 bytes/s
+        private const val QOS_TOKEN_RATE = 1200          // bytes/s (slight headroom)
+        private const val QOS_TOKEN_BUCKET_SIZE = 9       // one report
+        private const val QOS_PEAK_BANDWIDTH = 2400       // bytes/s (burst allowance)
+        private const val QOS_LATENCY_US = 11250          // 11.25ms target (BT connection interval)
+        private const val QOS_DELAY_VARIATION_US = 2500    // 2.5ms acceptable jitter
     }
 
     private fun markOp(name: String) {
@@ -251,7 +265,16 @@ class BluetoothHidManager(private val context: Context) {
             descriptor
         )
 
-        val success = hid.registerApp(sdpSettings, null, null, context.mainExecutor, hidCallback)
+        val outQos = BluetoothHidDeviceAppQosSettings(
+            BluetoothHidDeviceAppQosSettings.SERVICE_GUARANTEED,
+            QOS_TOKEN_RATE,
+            QOS_TOKEN_BUCKET_SIZE,
+            QOS_PEAK_BANDWIDTH,
+            QOS_LATENCY_US,
+            QOS_DELAY_VARIATION_US
+        )
+
+        val success = hid.registerApp(sdpSettings, null, outQos, context.mainExecutor, hidCallback)
         listener?.onLog(
             "REGISTER_POST: result=$success reason=$reason thread=${Thread.currentThread().name} | ${stateSnapshot()}"
         )
@@ -302,6 +325,21 @@ class BluetoothHidManager(private val context: Context) {
     }
 
     private fun doSend(report: ByteArray): Boolean {
+        val device = hostDevice ?: return false
+        val hid = hidDevice ?: return false
+        val sent = hid.sendReport(device, 0, report)
+        if (sent) {
+            lastSentReport = report.copyOf()
+            lastSendTimeNs = System.nanoTime()
+            sendCount++
+            reportCaptureListener?.invoke(report, lastSendTimeNs)
+        } else {
+            failCount++
+        }
+        return sent
+    }
+
+    fun sendRawReport(report: ByteArray): Boolean {
         val device = hostDevice ?: return false
         val hid = hidDevice ?: return false
         val sent = hid.sendReport(device, 0, report)

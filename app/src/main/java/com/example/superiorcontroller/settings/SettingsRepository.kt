@@ -18,6 +18,19 @@ class SettingsRepository(context: Context) {
     private val _triggerMode = MutableStateFlow(prefs.getString(Keys.TRIGGER_MODE, MODE_ANALOG) ?: MODE_ANALOG)
     private val _debugLogVisible = MutableStateFlow(prefs.getBoolean(Keys.DEBUG_LOG, false))
     private val _debugLogOverlay = MutableStateFlow(prefs.getBoolean(Keys.DEBUG_OVERLAY, false))
+    private val _digitalRecording = MutableStateFlow(prefs.getBoolean(Keys.DIGITAL_RECORDING, false))
+    private val _macroWarningSuppressed = MutableStateFlow(prefs.getBoolean(Keys.MACRO_WARNING_SUPPRESSED, false))
+    private val _assistLeftMode = MutableStateFlow(prefs.getString(Keys.ASSIST_LEFT_MODE, ASSIST_8DIR) ?: ASSIST_8DIR)
+    private val _assistRightMode = MutableStateFlow(
+        migrateRightMode(prefs.getString(Keys.ASSIST_RIGHT_MODE, ASSIST_STABLE75) ?: ASSIST_STABLE75)
+    )
+    private val _assistLeftTempo = MutableStateFlow(prefs.getString(Keys.ASSIST_LEFT_TEMPO, TEMPO_GRID) ?: TEMPO_GRID)
+    private val _assistRightTempo = MutableStateFlow(prefs.getString(Keys.ASSIST_RIGHT_TEMPO, TEMPO_PULSE) ?: TEMPO_PULSE)
+    private val _profileWarningSuppressed = MutableStateFlow(prefs.getBoolean(Keys.PROFILE_WARNING_SUPPRESSED, false))
+    private val _onboardingCompleted = MutableStateFlow(
+        if (prefs.contains(Keys.ONBOARDING_COMPLETED)) prefs.getBoolean(Keys.ONBOARDING_COMPLETED, false)
+        else prefs.all.isNotEmpty()
+    )
 
     val controllerProfile: Flow<String> = _controllerProfile
     val hapticsEnabled: Flow<Boolean> = _hapticsEnabled
@@ -25,6 +38,14 @@ class SettingsRepository(context: Context) {
     val triggerMode: Flow<String> = _triggerMode
     val debugLogVisible: Flow<Boolean> = _debugLogVisible
     val debugLogOverlay: Flow<Boolean> = _debugLogOverlay
+    val digitalRecording: Flow<Boolean> = _digitalRecording
+    val macroWarningSuppressed: Flow<Boolean> = _macroWarningSuppressed
+    val assistLeftMode: Flow<String> = _assistLeftMode
+    val assistRightMode: Flow<String> = _assistRightMode
+    val assistLeftTempo: Flow<String> = _assistLeftTempo
+    val assistRightTempo: Flow<String> = _assistRightTempo
+    val profileWarningSuppressed: Flow<Boolean> = _profileWarningSuppressed
+    val onboardingCompleted: Flow<Boolean> = _onboardingCompleted
 
     suspend fun setControllerProfile(profile: String) {
         withContext(Dispatchers.IO) { prefs.edit().putString(Keys.CONTROLLER_PROFILE, profile).apply() }
@@ -56,6 +77,46 @@ class SettingsRepository(context: Context) {
         _debugLogOverlay.value = overlay
     }
 
+    suspend fun setDigitalRecording(enabled: Boolean) {
+        withContext(Dispatchers.IO) { prefs.edit().putBoolean(Keys.DIGITAL_RECORDING, enabled).apply() }
+        _digitalRecording.value = enabled
+    }
+
+    suspend fun setMacroWarningSuppressed(suppressed: Boolean) {
+        withContext(Dispatchers.IO) { prefs.edit().putBoolean(Keys.MACRO_WARNING_SUPPRESSED, suppressed).apply() }
+        _macroWarningSuppressed.value = suppressed
+    }
+
+    suspend fun setAssistLeftMode(mode: String) {
+        withContext(Dispatchers.IO) { prefs.edit().putString(Keys.ASSIST_LEFT_MODE, mode).apply() }
+        _assistLeftMode.value = mode
+    }
+
+    suspend fun setAssistRightMode(mode: String) {
+        withContext(Dispatchers.IO) { prefs.edit().putString(Keys.ASSIST_RIGHT_MODE, mode).apply() }
+        _assistRightMode.value = mode
+    }
+
+    suspend fun setAssistLeftTempo(mode: String) {
+        withContext(Dispatchers.IO) { prefs.edit().putString(Keys.ASSIST_LEFT_TEMPO, mode).apply() }
+        _assistLeftTempo.value = mode
+    }
+
+    suspend fun setAssistRightTempo(mode: String) {
+        withContext(Dispatchers.IO) { prefs.edit().putString(Keys.ASSIST_RIGHT_TEMPO, mode).apply() }
+        _assistRightTempo.value = mode
+    }
+
+    suspend fun setProfileWarningSuppressed(suppressed: Boolean) {
+        withContext(Dispatchers.IO) { prefs.edit().putBoolean(Keys.PROFILE_WARNING_SUPPRESSED, suppressed).apply() }
+        _profileWarningSuppressed.value = suppressed
+    }
+
+    suspend fun setOnboardingCompleted() {
+        withContext(Dispatchers.IO) { prefs.edit().putBoolean(Keys.ONBOARDING_COMPLETED, true).apply() }
+        _onboardingCompleted.value = true
+    }
+
     private object Keys {
         const val CONTROLLER_PROFILE = "controller_profile"
         const val HAPTICS = "haptics_enabled"
@@ -63,6 +124,14 @@ class SettingsRepository(context: Context) {
         const val TRIGGER_MODE = "trigger_mode"
         const val DEBUG_LOG = "debug_log_visible"
         const val DEBUG_OVERLAY = "debug_log_overlay"
+        const val DIGITAL_RECORDING = "digital_recording"
+        const val MACRO_WARNING_SUPPRESSED = "macro_warning_suppressed"
+        const val ASSIST_LEFT_MODE = "assist_left_mode"
+        const val ASSIST_RIGHT_MODE = "assist_right_mode"
+        const val ASSIST_LEFT_TEMPO = "assist_left_tempo"
+        const val ASSIST_RIGHT_TEMPO = "assist_right_tempo"
+        const val PROFILE_WARNING_SUPPRESSED = "profile_warning_suppressed"
+        const val ONBOARDING_COMPLETED = "onboarding_completed"
     }
 
     companion object {
@@ -70,5 +139,17 @@ class SettingsRepository(context: Context) {
         const val MODE_BUTTON = "button"
         const val PROFILE_XBOX = "xbox"
         const val PROFILE_PLAYSTATION = "playstation"
+        const val ASSIST_8DIR = "8dir"
+        const val ASSIST_4DIR = "4dir"
+        const val ASSIST_STABLE75 = "stable75"
+        const val ASSIST_STABLE50 = "stable50"
+        const val TEMPO_FREE = "free"
+        const val TEMPO_GRID = "grid"
+        const val TEMPO_PULSE = "pulse"
+
+        private fun migrateRightMode(stored: String): String = when (stored) {
+            "precision" -> ASSIST_STABLE50
+            else -> stored
+        }
     }
 }

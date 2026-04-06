@@ -20,7 +20,8 @@ class KnownDevicesRepository(context: Context) {
                     name = obj.getString("name"),
                     alias = obj.optString("alias", ""),
                     address = obj.getString("address"),
-                    lastUsedAt = obj.optLong("lastUsedAt", 0L)
+                    lastUsedAt = obj.optLong("lastUsedAt", 0L),
+                    lastProfile = obj.optString("lastProfile", "")
                 )
             }.sortedByDescending { it.lastUsedAt }
         } catch (_: Exception) {
@@ -29,12 +30,22 @@ class KnownDevicesRepository(context: Context) {
     }
 
     fun save(device: KnownDevice) {
+        val existing = loadAll().find { it.address == device.address }
         val devices = loadAll().toMutableList()
         devices.removeAll { it.address == device.address }
-        val existing = loadAll().find { it.address == device.address }
-        val merged = device.copy(alias = existing?.alias ?: device.alias)
+        val merged = device.copy(
+            alias = existing?.alias ?: device.alias,
+            lastProfile = device.lastProfile.ifBlank { existing?.lastProfile ?: "" }
+        )
         devices.add(0, merged)
         persist(devices.take(MAX_DEVICES))
+    }
+
+    fun updateProfile(address: String, profile: String) {
+        val devices = loadAll().map {
+            if (it.address == address) it.copy(lastProfile = profile) else it
+        }
+        persist(devices)
     }
 
     fun rename(address: String, newAlias: String) {
@@ -58,6 +69,7 @@ class KnownDevicesRepository(context: Context) {
                 put("alias", d.alias)
                 put("address", d.address)
                 put("lastUsedAt", d.lastUsedAt)
+                put("lastProfile", d.lastProfile)
             })
         }
         prefs.edit().putString(KEY_DEVICES, arr.toString()).apply()

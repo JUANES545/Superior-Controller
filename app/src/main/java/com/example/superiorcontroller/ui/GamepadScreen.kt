@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,8 +35,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -42,6 +46,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -110,6 +115,12 @@ fun GamepadScreen(
     val triggerButtonMode = triggerMode == "button"
     val debugLogVisible by viewModel.debugLogVisible.collectAsState()
     val debugLogOverlay by viewModel.debugLogOverlay.collectAsState()
+    val digitalRecording by viewModel.digitalRecording.collectAsState()
+    val assistLeftMode by viewModel.assistLeftMode.collectAsState()
+    val assistRightMode by viewModel.assistRightMode.collectAsState()
+    val assistLeftTempo by viewModel.assistLeftTempo.collectAsState()
+    val assistRightTempo by viewModel.assistRightTempo.collectAsState()
+    val profileWarningSuppressed by viewModel.profileWarningSuppressed.collectAsState()
 
     var showSettings by remember { mutableStateOf(false) }
     var showRecordings by remember { mutableStateOf(false) }
@@ -131,9 +142,12 @@ fun GamepadScreen(
     val isRecording by viewModel.isRecording.collectAsState()
     val recordingElapsedMs by viewModel.recordingElapsedMs.collectAsState()
     val recordings by viewModel.recordings.collectAsState()
+    val hidRecordings by viewModel.hidRecordings.collectAsState()
     val playbackProgress by viewModel.playbackProgress.collectAsState()
 
     val showBtWarning by viewModel.showBtWarning.collectAsState()
+    val showMacroWarning by viewModel.showMacroWarning.collectAsState()
+    val profileSuggestion by viewModel.profileSuggestion.collectAsState()
 
     var pbWasActive by remember { mutableStateOf(false) }
     val pbCurrentlyActive = playbackProgress.status != PlaybackStatus.IDLE
@@ -148,6 +162,22 @@ fun GamepadScreen(
         BtWarningDialog(
             onConfirm = { viewModel.confirmBtWarning() },
             onDismiss = { viewModel.dismissBtWarning() }
+        )
+    }
+
+    if (showMacroWarning) {
+        MacroWarningDialog(
+            onConfirm = { dontShowAgain -> viewModel.confirmMacroWarning(dontShowAgain) },
+            onDismiss = { viewModel.dismissMacroWarning() }
+        )
+    }
+
+    profileSuggestion?.let { suggestion ->
+        ProfileSuggestionDialog(
+            deviceName = suggestion.deviceName,
+            suggestedProfile = suggestion.suggestedProfile,
+            onSwitch = { viewModel.acceptProfileSuggestion() },
+            onKeep = { viewModel.declineProfileSuggestion() }
         )
     }
 
@@ -320,9 +350,20 @@ fun GamepadScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFD32F2F)
                     )
+                    if (digitalRecording) {
+                        Text(
+                            text = stringResource(R.string.digital_rec_badge),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF00BFA5),
+                            modifier = Modifier
+                                .background(Color(0xFF00BFA5).copy(alpha = 0.15f), RoundedCornerShape(3.dp))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
                 }
 
-                if (recordings.isNotEmpty() && !isRecording) {
+                if (!isRecording) {
                     SmallFloatingActionButton(
                         onClick = { showRecordings = true },
                         containerColor = MaterialTheme.colorScheme.tertiaryContainer
@@ -357,12 +398,24 @@ fun GamepadScreen(
             triggerMode = triggerMode,
             debugLogVisible = debugLogVisible,
             debugLogOverlay = debugLogOverlay,
+            digitalRecording = digitalRecording,
+            assistLeftMode = assistLeftMode,
+            assistRightMode = assistRightMode,
+            assistLeftTempo = assistLeftTempo,
+            assistRightTempo = assistRightTempo,
+            profileWarningSuppressed = profileWarningSuppressed,
             onProfileChange = { viewModel.setControllerProfile(it) },
+            onProfileWarningSuppressed = { viewModel.setProfileWarningSuppressed(it) },
             onToggleHaptics = { viewModel.toggleHaptics(it) },
             onToggleSound = { viewModel.toggleSound(it) },
             onTriggerModeChange = { viewModel.setTriggerMode(it) },
             onToggleDebugLog = { viewModel.toggleDebugLog(it) },
             onToggleDebugOverlay = { viewModel.toggleDebugLogOverlay(it) },
+            onToggleDigitalRecording = { viewModel.toggleDigitalRecording(it) },
+            onAssistLeftModeChange = { viewModel.setAssistLeftMode(it) },
+            onAssistRightModeChange = { viewModel.setAssistRightMode(it) },
+            onAssistLeftTempoChange = { viewModel.setAssistLeftTempo(it) },
+            onAssistRightTempoChange = { viewModel.setAssistRightTempo(it) },
             onDismiss = { showSettings = false }
         )
     }
@@ -370,6 +423,7 @@ fun GamepadScreen(
     if (showRecordings) {
         RecordingsSheet(
             recordings = recordings,
+            hidRecordings = hidRecordings,
             playbackProgress = playbackProgress,
             onPlay = { viewModel.playRecording(it) },
             onPause = { viewModel.pausePlayback() },
@@ -416,6 +470,109 @@ private fun BtWarningDialog(
             }
         }
     )
+}
+
+@Composable
+private fun ProfileSuggestionDialog(
+    deviceName: String,
+    suggestedProfile: String,
+    onSwitch: () -> Unit,
+    onKeep: () -> Unit
+) {
+    val profileLabel = if (suggestedProfile == "playstation") "PlayStation" else "Xbox"
+    AlertDialog(
+        onDismissRequest = onKeep,
+        title = { Text(stringResource(R.string.profile_suggest_title)) },
+        text = {
+            Text(stringResource(R.string.profile_suggest_body, deviceName, profileLabel))
+        },
+        confirmButton = {
+            TextButton(onClick = onSwitch) {
+                Text(stringResource(R.string.profile_suggest_switch, profileLabel))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onKeep) {
+                Text(stringResource(R.string.profile_suggest_keep))
+            }
+        }
+    )
+}
+
+@Composable
+private fun MacroWarningDialog(
+    onConfirm: (dontShowAgain: Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var dontShowAgain by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(max = 380.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("🎯", fontSize = 28.sp)
+                Spacer(Modifier.height(12.dp))
+
+                Text(
+                    stringResource(R.string.macro_warning_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(12.dp))
+
+                Text(
+                    stringResource(R.string.macro_warning_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = 20.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(12.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { dontShowAgain = !dontShowAgain }
+                ) {
+                    Checkbox(
+                        checked = dontShowAgain,
+                        onCheckedChange = { dontShowAgain = it }
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        stringResource(R.string.macro_warning_suppress),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedButton(onClick = onDismiss) {
+                        Text(
+                            stringResource(R.string.dialog_cancel),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Button(onClick = { onConfirm(dontShowAgain) }) {
+                        Text(
+                            stringResource(R.string.macro_warning_accept),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ── Portrait ────────────────────────────────────────────────────────────

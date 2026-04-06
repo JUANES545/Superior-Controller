@@ -76,6 +76,10 @@
     <string name="settings_title">Settings</string>
     <string name="settings_profile_title">Controller profile</string>
     <string name="settings_profile_desc">Changes HID descriptor and button labels</string>
+    <string name="profile_change_title">Change controller profile?</string>
+    <string name="profile_change_body">For the change to take effect correctly, it is recommended to \"Forget\" Superior Controller on the receiving device (PC, tablet, etc.) and pair again.\n\nSome games like Genshin Impact work better with the PlayStation profile.</string>
+    <string name="profile_change_confirm">Change profile</string>
+
     <string name="settings_haptics_title">Button vibration</string>
     <string name="settings_haptics_desc">Vibrate on button press</string>
     <string name="settings_sound_title">Button sound</string>
@@ -84,6 +88,39 @@
     <string name="settings_trigger_mode_desc">Choose how LT and RT respond on screen</string>
     <string name="settings_trigger_analog">Analog</string>
     <string name="settings_trigger_button">Button</string>
+    <string name="settings_digital_rec_title">Assisted recording</string>
+    <string name="settings_digital_rec_desc">Simplify sticks and triggers for more consistent recordings</string>
+    <string name="settings_digital_rec_info">When enabled, stick and trigger inputs are simplified to discrete values while recording.\n\nSticks snap to configurable directions + neutral, and triggers become binary.\n\nPrecision will be reduced, but your recordings will replay much more consistently — ideal for repeatable routines.\n\nTap the gear icon to fine-tune each stick.\n\nOnly applies while you are actively recording.</string>
+    <string name="digital_rec_badge">ASSIST</string>
+
+    <!-- Assist advanced config -->
+    <string name="assist_config_title">Assisted recording — Settings</string>
+    <string name="assist_left_stick_title">Left stick (movement)</string>
+    <string name="assist_right_stick_title">Right stick (camera)</string>
+    <string name="assist_mode_8dir">8 dir</string>
+    <string name="assist_mode_4dir">4 dir</string>
+    <string name="assist_mode_stable75">75%</string>
+    <string name="assist_mode_stable50">50%</string>
+    <string name="assist_left_8dir_label">8 directions</string>
+    <string name="assist_left_4dir_label">4 directions</string>
+    <string name="assist_hint_8dir">More flexible, less stable</string>
+    <string name="assist_hint_4dir">No diagonals, more rigid</string>
+    <string name="assist_hint_stable75">Balance between control and reproducibility</string>
+    <string name="assist_hint_stable50">Maximum reproducibility, slower movement</string>
+    <string name="assist_recommended">(recommended)</string>
+    <string name="assist_section_direction">Direction</string>
+    <string name="assist_section_timing">Timing</string>
+    <string name="tempo_free">Free</string>
+    <string name="tempo_grid">Grid</string>
+    <string name="tempo_pulse">Pulse</string>
+    <string name="tempo_hint_free">No timing simplification</string>
+    <string name="tempo_hint_left_grid">Movement in ~50ms blocks</string>
+    <string name="tempo_hint_right_grid">Changes every ~100ms</string>
+    <string name="tempo_hint_pulse">Discrete camera pulses, most reproducible</string>
+    <string name="macro_warning_title">Assisted recording</string>
+    <string name="macro_warning_body">Sticks and triggers will be simplified to digital values.\n\nControl will be less precise, but recordings will replay much more consistently.</string>
+    <string name="macro_warning_accept">Start recording</string>
+    <string name="macro_warning_suppress">Don\'t show again</string>
     <string name="settings_debug_log_title">Debug log</string>
     <string name="settings_debug_log_desc">Show the debug console on screen</string>
     <string name="settings_debug_overlay_title">Layered view</string>
@@ -97,6 +134,48 @@
     <string name="recording_rename">Rename</string>
     <string name="dialog_cancel">Cancel</string>
     <string name="dialog_ok">OK</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_start">Get started</string>
+
+    <string name="onboarding_1_title">Your phone, your controller</string>
+    <string name="onboarding_1_body">Turn your phone into a wireless gamepad for PCs, tablets, and other compatible devices via Bluetooth.</string>
+
+    <string name="onboarding_2_title">Play your way</string>
+    <string name="onboarding_2_body">Use the virtual touchscreen controls or connect a physical controller via USB cable for a more familiar feel.</string>
+
+    <string name="onboarding_3_title">Record and replay</string>
+    <string name="onboarding_3_body">Capture gameplay routines and replay them later. Enable Assisted Recording for more consistent results.</string>
+
+    <string name="onboarding_4_title">About Bluetooth</string>
+    <string name="onboarding_4_body">While acting as a wireless controller, Bluetooth gamepads connected to your phone will disconnect.\n\nTo record with a physical controller, connect it via USB cable.</string>
+
+    <string name="onboarding_5_title">Ready to go</string>
+    <string name="onboarding_5_body">Grant Bluetooth permissions when prompted and start playing. You can fine-tune everything in Settings.</string>
+
+    <!-- Profile suggestion -->
+    <string name="profile_suggest_title">Change controller profile?</string>
+    <string name="profile_suggest_body">The last time you connected to %1$s you used the %2$s profile.\n\nWould you like to switch to that profile? Remember to re-pair the device if needed.</string>
+    <string name="profile_suggest_switch">Switch to %1$s</string>
+    <string name="profile_suggest_keep">Keep current</string>
+
+    <!-- About -->
+    <string name="settings_about">About</string>
+    <string name="about_section_app">Application</string>
+    <string name="about_section_device">Device</string>
+    <string name="about_version">Version</string>
+    <string name="about_build">Build</string>
+    <string name="about_package">Package</string>
+    <string name="about_android">Android</string>
+    <string name="about_brand">Brand</string>
+    <string name="about_model">Model</string>
+    <string name="about_developer">Developer</string>
+    <string name="about_developer_value">Superior Controller Team</string>
+    <string name="about_root_yes">Available</string>
+    <string name="about_root_no">Not available</string>
 
     <!-- Foreground service notification -->
     <string name="notif_channel_name">HID Controller</string>

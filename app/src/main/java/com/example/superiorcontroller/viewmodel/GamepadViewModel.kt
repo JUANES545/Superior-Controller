@@ -18,10 +18,16 @@ import com.example.superiorcontroller.hid.GamepadState
 import com.example.superiorcontroller.hid.HidDescriptor
 import com.example.superiorcontroller.hid.TriggerDefaults
 import com.example.superiorcontroller.input.HardwareGamepadManager
+import com.example.superiorcontroller.input.InputQuantizer
 import com.example.superiorcontroller.recording.GamepadSnapshot
+import com.example.superiorcontroller.recording.HidRecordingData
+import com.example.superiorcontroller.recording.HidRecordingMeta
+import com.example.superiorcontroller.recording.HidReportPlaybackEngine
+import com.example.superiorcontroller.recording.HidReportRecorder
 import com.example.superiorcontroller.recording.InputRecorder
 import com.example.superiorcontroller.recording.PlaybackEngine
 import com.example.superiorcontroller.recording.PlaybackProgress
+import com.example.superiorcontroller.recording.PlaybackStatus
 import com.example.superiorcontroller.recording.RecordingData
 import com.example.superiorcontroller.recording.RecordingMeta
 import com.example.superiorcontroller.recording.RecordingRepository
@@ -97,6 +103,42 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _debugLogOverlay = MutableStateFlow(false)
     val debugLogOverlay: StateFlow<Boolean> = _debugLogOverlay.asStateFlow()
 
+    private val _digitalRecording = MutableStateFlow(false)
+    val digitalRecording: StateFlow<Boolean> = _digitalRecording.asStateFlow()
+
+    private val _macroWarningSuppressed = MutableStateFlow(false)
+
+    private val _assistLeftMode = MutableStateFlow(SettingsRepository.ASSIST_8DIR)
+    val assistLeftMode: StateFlow<String> = _assistLeftMode.asStateFlow()
+    private val _assistRightMode = MutableStateFlow(SettingsRepository.ASSIST_STABLE75)
+    val assistRightMode: StateFlow<String> = _assistRightMode.asStateFlow()
+    private val _assistLeftTempo = MutableStateFlow(SettingsRepository.TEMPO_GRID)
+    val assistLeftTempo: StateFlow<String> = _assistLeftTempo.asStateFlow()
+    private val _assistRightTempo = MutableStateFlow(SettingsRepository.TEMPO_PULSE)
+    val assistRightTempo: StateFlow<String> = _assistRightTempo.asStateFlow()
+
+    private val temporalQuantizer = com.example.superiorcontroller.input.TemporalQuantizer(viewModelScope).also { tq ->
+        tq.onCommitLeft = { x, y -> applyLeftAxis(x, y) }
+        tq.onCommitRight = { x, y -> applyRightAxis(x, y) }
+    }
+
+    private val _profileWarningSuppressed = MutableStateFlow(false)
+    val profileWarningSuppressed: StateFlow<Boolean> = _profileWarningSuppressed.asStateFlow()
+
+    private val _onboardingCompleted = MutableStateFlow(true)
+    val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted.asStateFlow()
+
+    private val _showMacroWarning = MutableStateFlow(false)
+    val showMacroWarning: StateFlow<Boolean> = _showMacroWarning.asStateFlow()
+
+    data class ProfileSuggestion(
+        val address: String,
+        val deviceName: String,
+        val suggestedProfile: String
+    )
+    private val _profileSuggestion = MutableStateFlow<ProfileSuggestion?>(null)
+    val profileSuggestion: StateFlow<ProfileSuggestion?> = _profileSuggestion.asStateFlow()
+
     // ── Known devices / connection management ──────────────────────────
 
     private val _knownDevices = MutableStateFlow<List<KnownDevice>>(emptyList())
@@ -141,7 +183,14 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     val recordings: StateFlow<List<RecordingMeta>> = _recordings.asStateFlow()
 
     val playbackProgress: StateFlow<PlaybackProgress>
-        get() = playbackEngine.progress
+        get() {
+            val hidProg = hidPlaybackEngine.progress.value
+            return if (hidProg.status != PlaybackStatus.IDLE) hidPlaybackEngine.progress
+            else playbackEngine.progress
+        }
+
+    private val _hidRecordings = MutableStateFlow<List<HidRecordingMeta>>(emptyList())
+    val hidRecordings: StateFlow<List<HidRecordingMeta>> = _hidRecordings.asStateFlow()
 
     // ── Infrastructure ──────────────────────────────────────────────────
 
@@ -154,6 +203,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     private val recorder = InputRecorder()
     private val playbackEngine = PlaybackEngine()
+    private val hidReportRecorder = HidReportRecorder()
+    private val hidPlaybackEngine = HidReportPlaybackEngine()
     private val recordingRepo = RecordingRepository(application.applicationContext)
 
     private var recordingTimerJob: Job? = null
@@ -218,7 +269,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
                 val kd = KnownDevice(
                     name = btName,
                     address = address,
-                    lastUsedAt = System.currentTimeMillis()
+                    lastUsedAt = System.currentTimeMillis(),
+                    lastProfile = _controllerProfile.value
                 )
                 viewModelScope.launch(Dispatchers.IO) {
                     knownDevicesRepo.save(kd)
@@ -335,6 +387,20 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         hwManager.register()
         playbackEngine.sink = playbackSink
 
+        hidPlaybackEngine.sender = HidReportPlaybackEngine.ReportSender { report ->
+            hidManager.sendRawReport(report)
+        }
+        hidPlaybackEngine.completionListener = HidReportPlaybackEngine.CompletionListener {
+            viewModelScope.launch(Dispatchers.Main) {
+                val s = hidPlaybackEngine.stats.value
+                addLog("HID_PLAYBACK_COMPLETE: ${s.summary()}")
+                _gamepadState.value = GamepadState()
+            }
+        }
+        hidPlaybackEngine.uiUpdateListener = HidReportPlaybackEngine.UiUpdateListener { report, _ ->
+            updateGamepadStateFromReport(report)
+        }
+
         _knownDevices.value = knownDevicesRepo.loadAll()
 
         addLog("Mode: 11btn+2trig | report=${HidDescriptor.REPORT_SIZE}B | throttle=${BluetoothHidManager.MIN_INTERVAL_MS}ms")
@@ -382,8 +448,38 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
                 _debugLogOverlay.value = overlay
             }
         }
+        viewModelScope.launch {
+            settingsRepo.digitalRecording.collect { enabled ->
+                _digitalRecording.value = enabled
+                addLog("Settings: digitalRecording=${if (enabled) "ON" else "OFF"}")
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.macroWarningSuppressed.collect { suppressed ->
+                _macroWarningSuppressed.value = suppressed
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.assistLeftMode.collect { mode -> _assistLeftMode.value = mode }
+        }
+        viewModelScope.launch {
+            settingsRepo.assistRightMode.collect { mode -> _assistRightMode.value = mode }
+        }
+        viewModelScope.launch {
+            settingsRepo.assistLeftTempo.collect { mode -> _assistLeftTempo.value = mode }
+        }
+        viewModelScope.launch {
+            settingsRepo.assistRightTempo.collect { mode -> _assistRightTempo.value = mode }
+        }
+        viewModelScope.launch {
+            settingsRepo.profileWarningSuppressed.collect { _profileWarningSuppressed.value = it }
+        }
+        viewModelScope.launch {
+            settingsRepo.onboardingCompleted.collect { _onboardingCompleted.value = it }
+        }
         viewModelScope.launch(Dispatchers.IO) {
             _recordings.value = recordingRepo.loadAll()
+            _hidRecordings.value = recordingRepo.loadAllHid()
         }
     }
 
@@ -513,7 +609,37 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
+        val known = _knownDevices.value.find { it.address == address }
+        val savedProfile = known?.lastProfile.orEmpty()
+        if (savedProfile.isNotBlank() && savedProfile != _controllerProfile.value) {
+            _profileSuggestion.value = ProfileSuggestion(
+                address = address,
+                deviceName = known?.displayName ?: address,
+                suggestedProfile = savedProfile
+            )
+            return
+        }
+
         proceedWithConnection(address)
+    }
+
+    fun acceptProfileSuggestion() {
+        val suggestion = _profileSuggestion.value ?: return
+        _profileSuggestion.value = null
+        viewModelScope.launch {
+            settingsRepo.setControllerProfile(suggestion.suggestedProfile)
+            if (hidManager.isRegistered) {
+                addLog("PROFILE_SWITCH: re-registering with profile=${suggestion.suggestedProfile}")
+                hidManager.unregisterApp(reason = "PROFILE_SWITCH")
+            }
+            proceedWithConnection(suggestion.address)
+        }
+    }
+
+    fun declineProfileSuggestion() {
+        val suggestion = _profileSuggestion.value ?: return
+        _profileSuggestion.value = null
+        proceedWithConnection(suggestion.address)
     }
 
     fun removeKnownDevice(address: String) {
@@ -580,7 +706,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     // ── Button controls ─────────────────────────────────────────────────
 
     fun pressButton(button: Int, tag: String = "", hwEventTimeMs: Long = 0L) {
-        if (playbackEngine.isPlaying && !tag.startsWith("[PB]")) return
+        if (isAnyPlaybackPlaying && !tag.startsWith("[PB]")) return
         if (recorder.isRecording && !tag.startsWith("[PB]")) recorder.recordButtonPress(button, hwEventTimeMs)
 
         val state = _gamepadState.value
@@ -600,7 +726,7 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun releaseButton(button: Int, tag: String = "", hwEventTimeMs: Long = 0L) {
-        if (playbackEngine.isPlaying && !tag.startsWith("[PB]")) return
+        if (isAnyPlaybackPlaying && !tag.startsWith("[PB]")) return
         if (recorder.isRecording && !tag.startsWith("[PB]")) recorder.recordButtonRelease(button, hwEventTimeMs)
 
         val state = _gamepadState.value
@@ -633,10 +759,11 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     // ── Trigger controls ────────────────────────────────────────────────
 
     fun setLeftTrigger(normalized: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
-        if (playbackEngine.isPlaying && !fromPlayback) return
-        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftTrigger(normalized, hwEventTimeMs)
+        if (isAnyPlaybackPlaying && !fromPlayback) return
+        val q = if (shouldQuantize && !fromPlayback) InputQuantizer.quantizeTrigger(normalized) else normalized
+        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftTrigger(q, hwEventTimeMs)
 
-        val value = (normalized * TriggerDefaults.MAX).toInt()
+        val value = (q * TriggerDefaults.MAX).toInt()
             .coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX)
         val prev = _gamepadState.value.leftTrigger
         _gamepadState.value = _gamepadState.value.withLeftTrigger(value)
@@ -648,10 +775,11 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setRightTrigger(normalized: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
-        if (playbackEngine.isPlaying && !fromPlayback) return
-        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightTrigger(normalized, hwEventTimeMs)
+        if (isAnyPlaybackPlaying && !fromPlayback) return
+        val q = if (shouldQuantize && !fromPlayback) InputQuantizer.quantizeTrigger(normalized) else normalized
+        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightTrigger(q, hwEventTimeMs)
 
-        val value = (normalized * TriggerDefaults.MAX).toInt()
+        val value = (q * TriggerDefaults.MAX).toInt()
             .coerceIn(TriggerDefaults.REST, TriggerDefaults.MAX)
         val prev = _gamepadState.value.rightTrigger
         _gamepadState.value = _gamepadState.value.withRightTrigger(value)
@@ -665,133 +793,272 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     // ── Axis controls ───────────────────────────────────────────────────
 
     fun setLeftAxis(normalizedX: Float, normalizedY: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
-        if (playbackEngine.isPlaying && !fromPlayback) return
-        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftAxis(normalizedX, normalizedY, hwEventTimeMs)
+        if (isAnyPlaybackPlaying && !fromPlayback) return
+        val (qx, qy) = if (shouldQuantize && !fromPlayback)
+            InputQuantizer.quantizeStick(normalizedX, normalizedY, _assistLeftMode.value)
+        else normalizedX to normalizedY
 
-        val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
-        val y = ((normalizedY + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+        if (shouldQuantize && !fromPlayback && temporalQuantizer.isActive
+            && temporalQuantizer.leftMode != com.example.superiorcontroller.input.TemporalQuantizer.MODE_FREE) {
+            temporalQuantizer.feedLeft(qx, qy)
+            return
+        }
+        applyLeftAxis(qx, qy, fromPlayback)
+    }
+
+    private fun applyLeftAxis(qx: Float, qy: Float, fromPlayback: Boolean = false) {
+        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordLeftAxis(qx, qy, 0L)
+        val x = ((qx + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+        val y = ((qy + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         _gamepadState.value = _gamepadState.value.withLeftAxis(x, y)
         if (fromPlayback) sendForced("[PB] L-Axis") else sendThrottled()
     }
 
     fun setRightAxis(normalizedX: Float, normalizedY: Float, hwEventTimeMs: Long = 0L, fromPlayback: Boolean = false) {
-        if (playbackEngine.isPlaying && !fromPlayback) return
-        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightAxis(normalizedX, normalizedY, hwEventTimeMs)
+        if (isAnyPlaybackPlaying && !fromPlayback) return
+        val (qx, qy) = if (shouldQuantize && !fromPlayback)
+            InputQuantizer.quantizeStick(normalizedX, normalizedY, _assistRightMode.value)
+        else normalizedX to normalizedY
 
-        val x = ((normalizedX + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
-        val y = ((normalizedY + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+        if (shouldQuantize && !fromPlayback && temporalQuantizer.isActive
+            && temporalQuantizer.rightMode != com.example.superiorcontroller.input.TemporalQuantizer.MODE_FREE) {
+            temporalQuantizer.feedRight(qx, qy)
+            return
+        }
+        applyRightAxis(qx, qy, fromPlayback)
+    }
+
+    private fun applyRightAxis(qx: Float, qy: Float, fromPlayback: Boolean = false) {
+        if (recorder.isRecording && !playbackEngine.isRunning) recorder.recordRightAxis(qx, qy, 0L)
+        val x = ((qx + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
+        val y = ((qy + 1f) / 2f * AxisDefaults.MAX).toInt().coerceIn(AxisDefaults.MIN, AxisDefaults.MAX)
         _gamepadState.value = _gamepadState.value.withRightAxis(x, y)
         if (fromPlayback) sendForced("[PB] R-Axis") else sendThrottled()
     }
 
-    // ── Recording controls ──────────────────────────────────────────────
+    // ── Recording controls (HID raw report capture) ────────────────────
 
     fun startRecording() {
-        if (recorder.isRecording || playbackEngine.isRunning) return
-        val snap = captureSnapshot()
-        recorder.start(snap, hwBaseMs = SystemClock.uptimeMillis())
+        if (hidReportRecorder.isRecording || isAnyPlaybackRunning()) return
+        if (!_isConnected.value) {
+            addLog("REC_FAIL: not connected — HID recording requires active connection")
+            return
+        }
+        if (_digitalRecording.value && !_macroWarningSuppressed.value) {
+            _showMacroWarning.value = true
+            return
+        }
+        doStartRecording()
+    }
+
+    fun confirmMacroWarning(dontShowAgain: Boolean) {
+        _showMacroWarning.value = false
+        if (dontShowAgain) {
+            viewModelScope.launch { settingsRepo.setMacroWarningSuppressed(true) }
+        }
+        doStartRecording()
+    }
+
+    fun dismissMacroWarning() {
+        _showMacroWarning.value = false
+    }
+
+    private fun doStartRecording() {
+        if (hidReportRecorder.isRecording || !_isConnected.value) return
+        hidReportRecorder.start()
+        hidManager.reportCaptureListener = { report, sendTimeNs ->
+            hidReportRecorder.captureFrame(report, sendTimeNs)
+        }
+        if (_digitalRecording.value) {
+            temporalQuantizer.leftMode = _assistLeftTempo.value
+            temporalQuantizer.rightMode = _assistRightTempo.value
+            val needsTemporal = temporalQuantizer.leftMode != com.example.superiorcontroller.input.TemporalQuantizer.MODE_FREE
+                    || temporalQuantizer.rightMode != com.example.superiorcontroller.input.TemporalQuantizer.MODE_FREE
+            if (needsTemporal) temporalQuantizer.start()
+        }
         _isRecording.value = true
         _recordingElapsedMs.value = 0L
         recordingTimerJob = viewModelScope.launch {
-            while (recorder.isRecording) {
-                _recordingElapsedMs.value = recorder.elapsedMs()
+            while (hidReportRecorder.isRecording) {
+                _recordingElapsedMs.value = hidReportRecorder.elapsedMs()
                 delay(100)
             }
         }
-        addLog("REC_START snap=YES btn=0x${"%04X".format(snap.buttons)}")
-    }
-
-    private fun captureSnapshot(): GamepadSnapshot {
-        val s = _gamepadState.value
-        return GamepadSnapshot(
-            buttons = s.buttons,
-            dpad = s.dpad,
-            leftX = s.leftX.toFloat() / AxisDefaults.MAX.toFloat() * 2f - 1f,
-            leftY = s.leftY.toFloat() / AxisDefaults.MAX.toFloat() * 2f - 1f,
-            rightX = s.rightX.toFloat() / AxisDefaults.MAX.toFloat() * 2f - 1f,
-            rightY = s.rightY.toFloat() / AxisDefaults.MAX.toFloat() * 2f - 1f,
-            leftTrigger = s.leftTrigger.toFloat() / TriggerDefaults.MAX.toFloat(),
-            rightTrigger = s.rightTrigger.toFloat() / TriggerDefaults.MAX.toFloat()
-        )
+        val digi = if (_digitalRecording.value) " DIGITAL_MODE" else ""
+        val tempo = if (temporalQuantizer.isActive) " tempo:L=${temporalQuantizer.leftMode},R=${temporalQuantizer.rightMode}" else ""
+        addLog("HID_REC_START: capturing raw HID reports (profile=${_controllerProfile.value}$digi$tempo)")
     }
 
     fun stopRecording() {
-        if (!recorder.isRecording) return
-        val stats = recorder.statsString()
-        val snapshot = recorder.initialSnapshot
-        val events = recorder.stop()
+        if (!hidReportRecorder.isRecording) return
+        temporalQuantizer.stop()
+        hidManager.reportCaptureListener = null
+        val frames = hidReportRecorder.stop()
         _isRecording.value = false
         _recordingElapsedMs.value = 0L
         recordingTimerJob?.cancel()
 
-        if (events.isEmpty()) {
-            addLog("REC_STOP (empty, discarded) | $stats")
+        if (frames.isEmpty()) {
+            addLog("HID_REC_STOP: (empty, discarded)")
             return
         }
 
-        val duration = events.last().t
-        val count = _recordings.value.size + 1
+        val durationMs = frames.last().relativeNs / 1_000_000L
+        val count = _hidRecordings.value.size + 1
         val id = UUID.randomUUID().toString()
-        val data = RecordingData(
+        val data = HidRecordingData(
             id = id,
-            name = "Recording $count",
+            name = "HID Recording $count",
             createdAt = System.currentTimeMillis(),
-            durationMs = duration,
-            events = events,
-            initialSnapshot = snapshot
+            durationMs = durationMs,
+            frameCount = frames.size,
+            frames = frames,
+            profileUsed = _controllerProfile.value
         )
         viewModelScope.launch(Dispatchers.IO) {
-            recordingRepo.save(data)
-            _recordings.value = recordingRepo.loadAll()
+            recordingRepo.saveHid(data)
+            _hidRecordings.value = recordingRepo.loadAllHid()
         }
-        addLog("REC_STOP ${events.size} events, ${duration}ms | $stats")
+        addLog("HID_REC_STOP: ${frames.size} frames, ${durationMs}ms")
     }
+
+    private fun isAnyPlaybackRunning(): Boolean =
+        playbackEngine.isRunning || hidPlaybackEngine.isRunning
+
+    private val isAnyPlaybackPlaying: Boolean
+        get() = playbackEngine.isPlaying || hidPlaybackEngine.isPlaying
+
+    private val shouldQuantize: Boolean
+        get() = _digitalRecording.value && _isRecording.value
 
     // ── Playback controls ───────────────────────────────────────────────
 
     fun playRecording(id: String) {
-        if (recorder.isRecording || playbackEngine.isRunning) return
+        if (hidReportRecorder.isRecording || isAnyPlaybackRunning()) return
         viewModelScope.launch {
-            val data = withContext(Dispatchers.IO) { recordingRepo.load(id) }
-            if (data == null) {
-                addLog("PLAYBACK_FAIL: not found")
+            val hidData = withContext(Dispatchers.IO) { recordingRepo.loadHid(id) }
+            if (hidData != null) {
+                hidPlaybackEngine.play(hidData)
+                val expectedSlots = hidData.durationMs / HidReportPlaybackEngine.SLOT_INTERVAL_MS + 1
+                addLog("HID_PLAYBACK_START: ${hidData.name} (${hidData.frameCount} raw → ${expectedSlots} slots@${HidReportPlaybackEngine.SLOT_INTERVAL_MS}ms, ${hidData.durationMs}ms)")
                 return@launch
             }
-            playbackEngine.play(data, viewModelScope)
-            addLog("PLAYBACK_START: ${data.name} (${data.events.size} events, ${data.durationMs}ms)")
+            val data = withContext(Dispatchers.IO) { recordingRepo.load(id) }
+            if (data != null) {
+                playbackEngine.play(data, viewModelScope)
+                addLog("PLAYBACK_START: ${data.name} (${data.events.size} events, ${data.durationMs}ms)")
+                return@launch
+            }
+            addLog("PLAYBACK_FAIL: recording $id not found")
         }
     }
 
     fun pausePlayback() {
-        playbackEngine.pause()
-        addLog("PLAYBACK_PAUSE")
+        if (hidPlaybackEngine.isRunning) {
+            hidPlaybackEngine.pause()
+            addLog("HID_PLAYBACK_PAUSE")
+        } else {
+            playbackEngine.pause()
+            addLog("PLAYBACK_PAUSE")
+        }
     }
 
     fun resumePlayback() {
-        playbackEngine.resume()
-        addLog("PLAYBACK_RESUME")
+        if (hidPlaybackEngine.isRunning) {
+            hidPlaybackEngine.resume()
+            addLog("HID_PLAYBACK_RESUME")
+        } else {
+            playbackEngine.resume()
+            addLog("PLAYBACK_RESUME")
+        }
     }
 
     fun stopPlayback() {
-        playbackEngine.stop()
-        addLog("PLAYBACK_STOP")
+        if (hidPlaybackEngine.isRunning) {
+            hidPlaybackEngine.stop()
+            addLog("HID_PLAYBACK_STOP")
+        } else {
+            playbackEngine.stop()
+            addLog("PLAYBACK_STOP")
+        }
     }
 
     // ── Recording management ────────────────────────────────────────────
 
     fun deleteRecording(id: String) {
         if (playbackEngine.progress.value.recordingId == id) playbackEngine.stop()
+        if (hidPlaybackEngine.progress.value.recordingId == id) hidPlaybackEngine.stop()
         viewModelScope.launch(Dispatchers.IO) {
             recordingRepo.delete(id)
+            recordingRepo.deleteHid(id)
             _recordings.value = recordingRepo.loadAll()
+            _hidRecordings.value = recordingRepo.loadAllHid()
         }
     }
 
     fun renameRecording(id: String, newName: String) {
         viewModelScope.launch(Dispatchers.IO) {
             recordingRepo.rename(id, newName)
+            recordingRepo.renameHid(id, newName)
             _recordings.value = recordingRepo.loadAll()
+            _hidRecordings.value = recordingRepo.loadAllHid()
         }
+    }
+
+    /**
+     * Reverse-parse a raw HID report to update UI state during playback.
+     * This provides visual feedback without affecting the HID pipeline.
+     */
+    private fun updateGamepadStateFromReport(report: ByteArray) {
+        if (report.size < HidDescriptor.REPORT_SIZE) return
+        val b0 = report[0].toInt() and 0xFF
+        val b1 = report[1].toInt() and 0xFF
+        val hat = report[2].toInt() and 0x0F
+        val lx = report[3].toInt() and 0xFF
+        val ly = report[4].toInt() and 0xFF
+        val rx = report[5].toInt() and 0xFF
+        val ry = report[6].toInt() and 0xFF
+        val lt = report[7].toInt() and 0xFF
+        val rt = report[8].toInt() and 0xFF
+
+        val buttons = if (isPsProfile) {
+            var xb = 0
+            if (b0 and (1 shl 0) != 0) xb = xb or GamepadButtons.X      // Square → X
+            if (b0 and (1 shl 1) != 0) xb = xb or GamepadButtons.A      // Cross → A
+            if (b0 and (1 shl 2) != 0) xb = xb or GamepadButtons.B      // Circle → B
+            if (b0 and (1 shl 3) != 0) xb = xb or GamepadButtons.Y      // Triangle → Y
+            if (b0 and (1 shl 4) != 0) xb = xb or GamepadButtons.LB     // L1 → LB
+            if (b0 and (1 shl 5) != 0) xb = xb or GamepadButtons.RB     // R1 → RB
+            // bits 6,7 = L2/R2 digital — represented by analog triggers
+            val b1ps = b1
+            if (b1ps and (1 shl 0) != 0) xb = xb or GamepadButtons.BACK  // Create → Back
+            if (b1ps and (1 shl 1) != 0) xb = xb or GamepadButtons.START // Options → Start
+            if (b1ps and (1 shl 2) != 0) xb = xb or GamepadButtons.L3
+            if (b1ps and (1 shl 3) != 0) xb = xb or GamepadButtons.R3
+            if (b1ps and (1 shl 4) != 0) xb = xb or GamepadButtons.HOME  // PS → Home
+            xb
+        } else {
+            b0 or (b1 shl 8)
+        }
+
+        val dpad = when (hat) {
+            1 -> GamepadButtons.DPAD_UP
+            2 -> GamepadButtons.DPAD_UP or GamepadButtons.DPAD_RIGHT
+            3 -> GamepadButtons.DPAD_RIGHT
+            4 -> GamepadButtons.DPAD_DOWN or GamepadButtons.DPAD_RIGHT
+            5 -> GamepadButtons.DPAD_DOWN
+            6 -> GamepadButtons.DPAD_DOWN or GamepadButtons.DPAD_LEFT
+            7 -> GamepadButtons.DPAD_LEFT
+            8 -> GamepadButtons.DPAD_UP or GamepadButtons.DPAD_LEFT
+            else -> 0
+        }
+
+        _gamepadState.value = GamepadState(
+            buttons = buttons, dpad = dpad,
+            leftX = lx, leftY = ly,
+            rightX = rx, rightY = ry,
+            leftTrigger = lt, rightTrigger = rt
+        )
     }
 
     // ── Report dispatch ─────────────────────────────────────────────────
@@ -849,7 +1116,13 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     fun clearLog() { _logMessages.value = emptyList() }
 
     fun setControllerProfile(profile: String) {
-        viewModelScope.launch { settingsRepo.setControllerProfile(profile) }
+        viewModelScope.launch {
+            settingsRepo.setControllerProfile(profile)
+            _connectedHostAddress.value?.let { addr ->
+                withContext(Dispatchers.IO) { knownDevicesRepo.updateProfile(addr, profile) }
+                _knownDevices.value = withContext(Dispatchers.IO) { knownDevicesRepo.loadAll() }
+            }
+        }
     }
 
     fun toggleHaptics(enabled: Boolean) {
@@ -870,6 +1143,34 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     fun toggleDebugLogOverlay(overlay: Boolean) {
         viewModelScope.launch { settingsRepo.setDebugLogOverlay(overlay) }
+    }
+
+    fun toggleDigitalRecording(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setDigitalRecording(enabled) }
+    }
+
+    fun setAssistLeftMode(mode: String) {
+        viewModelScope.launch { settingsRepo.setAssistLeftMode(mode) }
+    }
+
+    fun setAssistRightMode(mode: String) {
+        viewModelScope.launch { settingsRepo.setAssistRightMode(mode) }
+    }
+
+    fun setAssistLeftTempo(mode: String) {
+        viewModelScope.launch { settingsRepo.setAssistLeftTempo(mode) }
+    }
+
+    fun setAssistRightTempo(mode: String) {
+        viewModelScope.launch { settingsRepo.setAssistRightTempo(mode) }
+    }
+
+    fun setProfileWarningSuppressed(suppressed: Boolean) {
+        viewModelScope.launch { settingsRepo.setProfileWarningSuppressed(suppressed) }
+    }
+
+    fun completeOnboarding() {
+        viewModelScope.launch { settingsRepo.setOnboardingCompleted() }
     }
 
     override fun onCleared() {
