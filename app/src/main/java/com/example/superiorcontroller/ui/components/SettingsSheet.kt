@@ -31,6 +31,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -38,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -51,6 +54,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import kotlin.math.roundToInt
 import com.example.superiorcontroller.R
 import com.example.superiorcontroller.input.InputQuantizer
 import com.example.superiorcontroller.input.TemporalQuantizer
@@ -60,7 +64,10 @@ import com.example.superiorcontroller.input.TemporalQuantizer
 fun SettingsSheet(
     controllerProfile: String,
     hapticsEnabled: Boolean,
+    hapticsIntensity: String,
     soundEnabled: Boolean,
+    soundStyle: String,
+    soundVolume: Float,
     triggerMode: String,
     debugLogVisible: Boolean,
     debugLogOverlay: Boolean,
@@ -73,7 +80,10 @@ fun SettingsSheet(
     onProfileChange: (String) -> Unit,
     onProfileWarningSuppressed: (Boolean) -> Unit,
     onToggleHaptics: (Boolean) -> Unit,
+    onHapticsIntensityChange: (String) -> Unit,
     onToggleSound: (Boolean) -> Unit,
+    onSoundStyleChange: (String) -> Unit,
+    onSoundVolumeChange: (Float) -> Unit,
     onTriggerModeChange: (String) -> Unit,
     onToggleDebugLog: (Boolean) -> Unit,
     onToggleDebugOverlay: (Boolean) -> Unit,
@@ -85,6 +95,8 @@ fun SettingsSheet(
     onDismiss: () -> Unit
 ) {
     var showAssistConfig by remember { mutableStateOf(false) }
+    var showHapticsConfig by remember { mutableStateOf(false) }
+    var showSoundConfig by remember { mutableStateOf(false) }
     var pendingProfile by remember { mutableStateOf<String?>(null) }
     var showAbout by remember { mutableStateOf(false) }
 
@@ -139,18 +151,22 @@ fun SettingsSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            SettingsToggle(
+            SettingsToggleWithGearSimple(
                 title = stringResource(R.string.settings_haptics_title),
                 description = stringResource(R.string.settings_haptics_desc),
                 checked = hapticsEnabled,
-                onCheckedChange = onToggleHaptics
+                gearEnabled = hapticsEnabled,
+                onCheckedChange = onToggleHaptics,
+                onGearClick = { showHapticsConfig = true }
             )
 
-            SettingsToggle(
+            SettingsToggleWithGearSimple(
                 title = stringResource(R.string.settings_sound_title),
                 description = stringResource(R.string.settings_sound_desc),
                 checked = soundEnabled,
-                onCheckedChange = onToggleSound
+                gearEnabled = soundEnabled,
+                onCheckedChange = onToggleSound,
+                onGearClick = { showSoundConfig = true }
             )
 
             Spacer(Modifier.height(12.dp))
@@ -259,6 +275,24 @@ fun SettingsSheet(
             onLeftTempoChange = onAssistLeftTempoChange,
             onRightTempoChange = onAssistRightTempoChange,
             onDismiss = { showAssistConfig = false }
+        )
+    }
+
+    if (showHapticsConfig) {
+        HapticsConfigDialog(
+            intensity = hapticsIntensity,
+            onIntensityChange = onHapticsIntensityChange,
+            onDismiss = { showHapticsConfig = false }
+        )
+    }
+
+    if (showSoundConfig) {
+        SoundConfigDialog(
+            style = soundStyle,
+            volume = soundVolume,
+            onStyleChange = onSoundStyleChange,
+            onVolumeChange = onSoundVolumeChange,
+            onDismiss = { showSoundConfig = false }
         )
     }
 
@@ -610,6 +644,192 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                 AboutRow(stringResource(R.string.about_brand), Build.MANUFACTURER.replaceFirstChar { it.uppercase() })
                 AboutRow(stringResource(R.string.about_model), Build.MODEL)
                 AboutRow(stringResource(R.string.about_android), "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+
+                Spacer(Modifier.height(16.dp))
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+                    Text(stringResource(R.string.dialog_ok))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsToggleWithGearSimple(
+    title: String,
+    description: String,
+    checked: Boolean,
+    gearEnabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onGearClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.titleSmall)
+            Text(text = description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (gearEnabled) {
+            IconButton(onClick = onGearClick, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Outlined.Settings, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun HapticsConfigDialog(
+    intensity: String,
+    onIntensityChange: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(20.dp), tonalElevation = 6.dp, modifier = Modifier.widthIn(max = 360.dp)) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(stringResource(R.string.haptics_config_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(16.dp))
+                Text(stringResource(R.string.haptics_intensity_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    val options = listOf(
+                        ButtonHaptics.INTENSITY_SOFT to R.string.haptics_soft,
+                        ButtonHaptics.INTENSITY_MEDIUM to R.string.haptics_medium,
+                        ButtonHaptics.INTENSITY_STRONG to R.string.haptics_strong
+                    )
+                    options.forEachIndexed { idx, (mode, labelRes) ->
+                        SegmentedButton(
+                            selected = intensity == mode,
+                            onClick = { onIntensityChange(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(index = idx, count = options.size),
+                            icon = {}
+                        ) { Text(stringResource(labelRes), fontSize = 12.sp) }
+                    }
+                }
+                val hint = when (intensity) {
+                    ButtonHaptics.INTENSITY_SOFT -> stringResource(R.string.haptics_hint_soft)
+                    ButtonHaptics.INTENSITY_STRONG -> stringResource(R.string.haptics_hint_strong)
+                    else -> stringResource(R.string.haptics_hint_medium)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                Spacer(Modifier.height(20.dp))
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+                    Text(stringResource(R.string.dialog_ok))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SoundConfigDialog(
+    style: String,
+    volume: Float,
+    onStyleChange: (String) -> Unit,
+    onVolumeChange: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var localVolume by remember { mutableFloatStateOf(volume) }
+    var lastPreviewMs by remember { mutableStateOf(0L) }
+
+    fun tryPreview(s: String = style, v: Float = localVolume) {
+        val now = System.currentTimeMillis()
+        if (now - lastPreviewMs < 150) return
+        lastPreviewMs = now
+        try { ButtonSoundPlayer.playPreview(s, v) } catch (_: Exception) {}
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(20.dp), tonalElevation = 6.dp, modifier = Modifier.widthIn(max = 360.dp)) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(stringResource(R.string.sound_config_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+                Spacer(Modifier.height(16.dp))
+                Text(stringResource(R.string.sound_style_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    val options = listOf(
+                        ButtonSoundPlayer.STYLE_SOFT to R.string.sound_soft,
+                        ButtonSoundPlayer.STYLE_SHORT to R.string.sound_short,
+                        ButtonSoundPlayer.STYLE_ARCADE to R.string.sound_arcade,
+                        ButtonSoundPlayer.STYLE_MECHANICAL to R.string.sound_mechanical
+                    )
+                    options.forEachIndexed { idx, (mode, labelRes) ->
+                        SegmentedButton(
+                            selected = style == mode,
+                            onClick = {
+                                onStyleChange(mode)
+                                tryPreview(s = mode)
+                            },
+                            shape = SegmentedButtonDefaults.itemShape(index = idx, count = options.size),
+                            icon = {}
+                        ) { Text(stringResource(labelRes), fontSize = 11.sp, maxLines = 1, textAlign = TextAlign.Center) }
+                    }
+                }
+                val hint = when (style) {
+                    ButtonSoundPlayer.STYLE_SOFT -> stringResource(R.string.sound_hint_soft)
+                    ButtonSoundPlayer.STYLE_SHORT -> stringResource(R.string.sound_hint_short)
+                    ButtonSoundPlayer.STYLE_ARCADE -> stringResource(R.string.sound_hint_arcade)
+                    ButtonSoundPlayer.STYLE_MECHANICAL -> stringResource(R.string.sound_hint_mechanical)
+                    else -> null
+                }
+                if (hint != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                }
+
+                Spacer(Modifier.height(18.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                Spacer(Modifier.height(14.dp))
+
+                val isSilent = localVolume == 0f
+                val pct = (localVolume * 100).roundToInt()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        stringResource(R.string.sound_volume_label),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        if (isSilent) stringResource(R.string.sound_silent) else "$pct%",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isSilent) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val leftIcon = if (isSilent) "🔇" else "🔈"
+                    Text(leftIcon, fontSize = 16.sp)
+                    Slider(
+                        value = localVolume,
+                        onValueChange = { localVolume = it },
+                        onValueChangeFinished = {
+                            onVolumeChange(localVolume)
+                            tryPreview(v = localVolume)
+                        },
+                        valueRange = 0f..1f,
+                        modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
+                        colors = SliderDefaults.colors(
+                            thumbColor = if (isSilent) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            activeTrackColor = if (isSilent) MaterialTheme.colorScheme.error.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary
+                        )
+                    )
+                    Text("🔊", fontSize = 16.sp)
+                }
 
                 Spacer(Modifier.height(16.dp))
                 TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {

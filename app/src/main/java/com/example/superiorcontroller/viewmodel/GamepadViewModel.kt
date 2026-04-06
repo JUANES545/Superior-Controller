@@ -90,9 +90,15 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
 
     private val _hapticsEnabled = MutableStateFlow(true)
     val hapticsEnabled: StateFlow<Boolean> = _hapticsEnabled.asStateFlow()
+    private val _hapticsIntensity = MutableStateFlow(SettingsRepository.HAPTICS_MEDIUM)
+    val hapticsIntensity: StateFlow<String> = _hapticsIntensity.asStateFlow()
 
     private val _soundEnabled = MutableStateFlow(true)
     val soundEnabled: StateFlow<Boolean> = _soundEnabled.asStateFlow()
+    private val _soundStyle = MutableStateFlow(SettingsRepository.SOUND_SOFT)
+    val soundStyle: StateFlow<String> = _soundStyle.asStateFlow()
+    private val _soundVolume = MutableStateFlow(0.7f)
+    val soundVolume: StateFlow<Float> = _soundVolume.asStateFlow()
 
     private val _triggerMode = MutableStateFlow(SettingsRepository.MODE_ANALOG)
     val triggerMode: StateFlow<String> = _triggerMode.asStateFlow()
@@ -418,6 +424,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
         }
+        ButtonHaptics.init(getApplication())
+        ButtonSoundPlayer.init()
         viewModelScope.launch {
             settingsRepo.hapticsEnabled.collect { enabled ->
                 _hapticsEnabled.value = enabled
@@ -426,10 +434,28 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             }
         }
         viewModelScope.launch {
+            settingsRepo.hapticsIntensity.collect { intensity ->
+                _hapticsIntensity.value = intensity
+                ButtonHaptics.intensity = intensity
+            }
+        }
+        viewModelScope.launch {
             settingsRepo.soundEnabled.collect { enabled ->
                 _soundEnabled.value = enabled
                 ButtonSoundPlayer.enabled = enabled
                 addLog("Settings: sound=${if (enabled) "ON" else "OFF"}")
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.soundStyle.collect { style ->
+                _soundStyle.value = style
+                ButtonSoundPlayer.style = style
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.soundVolume.collect { vol ->
+                _soundVolume.value = vol
+                ButtonSoundPlayer.volume = vol
             }
         }
         viewModelScope.launch {
@@ -1129,8 +1155,20 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { settingsRepo.setHapticsEnabled(enabled) }
     }
 
+    fun setHapticsIntensity(intensity: String) {
+        viewModelScope.launch { settingsRepo.setHapticsIntensity(intensity) }
+    }
+
     fun toggleSound(enabled: Boolean) {
         viewModelScope.launch { settingsRepo.setSoundEnabled(enabled) }
+    }
+
+    fun setSoundStyle(style: String) {
+        viewModelScope.launch { settingsRepo.setSoundStyle(style) }
+    }
+
+    fun setSoundVolume(volume: Float) {
+        viewModelScope.launch { settingsRepo.setSoundVolume(volume) }
     }
 
     fun setTriggerMode(mode: String) {
