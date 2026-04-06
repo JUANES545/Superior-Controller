@@ -110,7 +110,10 @@ fun GamepadScreen(
 
     val controllerProfile by viewModel.controllerProfile.collectAsState()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
+    val hapticsIntensity by viewModel.hapticsIntensity.collectAsState()
     val soundEnabled by viewModel.soundEnabled.collectAsState()
+    val soundStyle by viewModel.soundStyle.collectAsState()
+    val soundVolume by viewModel.soundVolume.collectAsState()
     val triggerMode by viewModel.triggerMode.collectAsState()
     val triggerButtonMode = triggerMode == "button"
     val debugLogVisible by viewModel.debugLogVisible.collectAsState()
@@ -394,7 +397,10 @@ fun GamepadScreen(
         SettingsSheet(
             controllerProfile = controllerProfile,
             hapticsEnabled = hapticsEnabled,
+            hapticsIntensity = hapticsIntensity,
             soundEnabled = soundEnabled,
+            soundStyle = soundStyle,
+            soundVolume = soundVolume,
             triggerMode = triggerMode,
             debugLogVisible = debugLogVisible,
             debugLogOverlay = debugLogOverlay,
@@ -407,7 +413,10 @@ fun GamepadScreen(
             onProfileChange = { viewModel.setControllerProfile(it) },
             onProfileWarningSuppressed = { viewModel.setProfileWarningSuppressed(it) },
             onToggleHaptics = { viewModel.toggleHaptics(it) },
+            onHapticsIntensityChange = { viewModel.setHapticsIntensity(it) },
             onToggleSound = { viewModel.toggleSound(it) },
+            onSoundStyleChange = { viewModel.setSoundStyle(it) },
+            onSoundVolumeChange = { viewModel.setSoundVolume(it) },
             onTriggerModeChange = { viewModel.setTriggerMode(it) },
             onToggleDebugLog = { viewModel.toggleDebugLog(it) },
             onToggleDebugOverlay = { viewModel.toggleDebugLogOverlay(it) },

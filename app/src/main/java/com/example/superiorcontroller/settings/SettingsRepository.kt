@@ -14,7 +14,10 @@ class SettingsRepository(context: Context) {
 
     private val _controllerProfile = MutableStateFlow(prefs.getString(Keys.CONTROLLER_PROFILE, PROFILE_XBOX) ?: PROFILE_XBOX)
     private val _hapticsEnabled = MutableStateFlow(prefs.getBoolean(Keys.HAPTICS, true))
+    private val _hapticsIntensity = MutableStateFlow(prefs.getString(Keys.HAPTICS_INTENSITY, HAPTICS_MEDIUM) ?: HAPTICS_MEDIUM)
     private val _soundEnabled = MutableStateFlow(prefs.getBoolean(Keys.SOUND, true))
+    private val _soundStyle = MutableStateFlow(prefs.getString(Keys.SOUND_STYLE, SOUND_SOFT) ?: SOUND_SOFT)
+    private val _soundVolume = MutableStateFlow(prefs.getFloat(Keys.SOUND_VOLUME, 0.7f))
     private val _triggerMode = MutableStateFlow(prefs.getString(Keys.TRIGGER_MODE, MODE_ANALOG) ?: MODE_ANALOG)
     private val _debugLogVisible = MutableStateFlow(prefs.getBoolean(Keys.DEBUG_LOG, false))
     private val _debugLogOverlay = MutableStateFlow(prefs.getBoolean(Keys.DEBUG_OVERLAY, false))
@@ -34,7 +37,10 @@ class SettingsRepository(context: Context) {
 
     val controllerProfile: Flow<String> = _controllerProfile
     val hapticsEnabled: Flow<Boolean> = _hapticsEnabled
+    val hapticsIntensity: Flow<String> = _hapticsIntensity
     val soundEnabled: Flow<Boolean> = _soundEnabled
+    val soundStyle: Flow<String> = _soundStyle
+    val soundVolume: Flow<Float> = _soundVolume
     val triggerMode: Flow<String> = _triggerMode
     val debugLogVisible: Flow<Boolean> = _debugLogVisible
     val debugLogOverlay: Flow<Boolean> = _debugLogOverlay
@@ -57,9 +63,25 @@ class SettingsRepository(context: Context) {
         _hapticsEnabled.value = enabled
     }
 
+    suspend fun setHapticsIntensity(intensity: String) {
+        withContext(Dispatchers.IO) { prefs.edit().putString(Keys.HAPTICS_INTENSITY, intensity).apply() }
+        _hapticsIntensity.value = intensity
+    }
+
     suspend fun setSoundEnabled(enabled: Boolean) {
         withContext(Dispatchers.IO) { prefs.edit().putBoolean(Keys.SOUND, enabled).apply() }
         _soundEnabled.value = enabled
+    }
+
+    suspend fun setSoundStyle(style: String) {
+        withContext(Dispatchers.IO) { prefs.edit().putString(Keys.SOUND_STYLE, style).apply() }
+        _soundStyle.value = style
+    }
+
+    suspend fun setSoundVolume(volume: Float) {
+        val v = volume.coerceIn(0f, 1f)
+        withContext(Dispatchers.IO) { prefs.edit().putFloat(Keys.SOUND_VOLUME, v).apply() }
+        _soundVolume.value = v
     }
 
     suspend fun setTriggerMode(mode: String) {
@@ -120,7 +142,10 @@ class SettingsRepository(context: Context) {
     private object Keys {
         const val CONTROLLER_PROFILE = "controller_profile"
         const val HAPTICS = "haptics_enabled"
+        const val HAPTICS_INTENSITY = "haptics_intensity"
         const val SOUND = "sound_enabled"
+        const val SOUND_STYLE = "sound_style"
+        const val SOUND_VOLUME = "sound_volume"
         const val TRIGGER_MODE = "trigger_mode"
         const val DEBUG_LOG = "debug_log_visible"
         const val DEBUG_OVERLAY = "debug_log_overlay"
@@ -146,6 +171,13 @@ class SettingsRepository(context: Context) {
         const val TEMPO_FREE = "free"
         const val TEMPO_GRID = "grid"
         const val TEMPO_PULSE = "pulse"
+        const val HAPTICS_SOFT = "soft"
+        const val HAPTICS_MEDIUM = "medium"
+        const val HAPTICS_STRONG = "strong"
+        const val SOUND_SOFT = "soft"
+        const val SOUND_SHORT = "short"
+        const val SOUND_ARCADE = "arcade"
+        const val SOUND_MECHANICAL = "mechanical"
 
         private fun migrateRightMode(stored: String): String = when (stored) {
             "precision" -> ASSIST_STABLE50

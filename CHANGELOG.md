@@ -5,6 +5,20 @@ All notable changes to Superior Controller will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-04-06
+
+### Added
+- Haptic intensity settings: soft, medium, and strong vibration levels with configurable duration and amplitude
+- Sound click styles: soft, short, arcade, and mechanical — each with unique AudioTrack PCM waveform synthesis
+- Volume slider for click sounds with real-time preview
+- Settings dialogs for haptics and sound configuration
+- Spanish localization for all new feedback strings
+
+### Changed
+- Refactored `ButtonHaptics` with cached vibrator instance and amplitude control
+- Refactored `ButtonSoundPlayer` with full AudioTrack-based sound generation per style
+- Expanded `SettingsRepository` with haptics intensity, sound style, and volume preferences
+
 ## [1.7.0] - 2026-04-06
 
 ### Added
@@ -109,6 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MVVM architecture with StateFlow
 - README with project documentation and APK download link
 
+[1.8.0]: https://github.com/JUANES545/Superior-Controller/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/JUANES545/Superior-Controller/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/JUANES545/Superior-Controller/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/JUANES545/Superior-Controller/compare/v1.4.0...v1.5.0

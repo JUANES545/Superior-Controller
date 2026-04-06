@@ -84,6 +84,30 @@
     <string name="settings_haptics_desc">Vibrar al presionar botones</string>
     <string name="settings_sound_title">Sonido de botones</string>
     <string name="settings_sound_desc">Reproducir sonido al presionar botones</string>
+
+    <!-- Haptics config -->
+    <string name="haptics_config_title">Vibración — Ajustes</string>
+    <string name="haptics_intensity_label">Intensidad</string>
+    <string name="haptics_soft">Suave</string>
+    <string name="haptics_medium">Media</string>
+    <string name="haptics_strong">Fuerte</string>
+    <string name="haptics_hint_soft">Vibración sutil y ligera</string>
+    <string name="haptics_hint_medium">Vibración equilibrada</string>
+    <string name="haptics_hint_strong">Vibración intensa y notable</string>
+
+    <!-- Sound config -->
+    <string name="sound_config_title">Sonido — Ajustes</string>
+    <string name="sound_style_label">Estilo de click</string>
+    <string name="sound_soft">Suave</string>
+    <string name="sound_short">Corto</string>
+    <string name="sound_arcade">Arcade</string>
+    <string name="sound_mechanical">Mecán.</string>
+    <string name="sound_volume_label">Volumen del click</string>
+    <string name="sound_silent">Silencioso</string>
+    <string name="sound_hint_soft">Click silencioso y sutil</string>
+    <string name="sound_hint_short">Click rápido y agudo</string>
+    <string name="sound_hint_arcade">Bip retro de dos tonos</string>
+    <string name="sound_hint_mechanical">Golpe táctil de ruido</string>
     <string name="settings_trigger_mode_title">Interacción de gatillos</string>
     <string name="settings_trigger_mode_desc">Elegir cómo responden LT y RT en pantalla</string>
     <string name="settings_trigger_analog">Analógico</string>

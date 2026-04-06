@@ -84,6 +84,30 @@
     <string name="settings_haptics_desc">Vibrate on button press</string>
     <string name="settings_sound_title">Button sound</string>
     <string name="settings_sound_desc">Play click sound on button press</string>
+
+    <!-- Haptics config -->
+    <string name="haptics_config_title">Vibration — Settings</string>
+    <string name="haptics_intensity_label">Intensity</string>
+    <string name="haptics_soft">Soft</string>
+    <string name="haptics_medium">Medium</string>
+    <string name="haptics_strong">Strong</string>
+    <string name="haptics_hint_soft">Light subtle feedback</string>
+    <string name="haptics_hint_medium">Balanced feedback</string>
+    <string name="haptics_hint_strong">Intense and noticeable</string>
+
+    <!-- Sound config -->
+    <string name="sound_config_title">Sound — Settings</string>
+    <string name="sound_style_label">Click style</string>
+    <string name="sound_soft">Soft</string>
+    <string name="sound_short">Short</string>
+    <string name="sound_arcade">Arcade</string>
+    <string name="sound_mechanical">Mech</string>
+    <string name="sound_volume_label">Click volume</string>
+    <string name="sound_silent">Silent</string>
+    <string name="sound_hint_soft">Quiet and subtle click</string>
+    <string name="sound_hint_short">Quick sharp click</string>
+    <string name="sound_hint_arcade">Retro two-tone blip</string>
+    <string name="sound_hint_mechanical">Tactile noise burst</string>
     <string name="settings_trigger_mode_title">Trigger interaction</string>
     <string name="settings_trigger_mode_desc">Choose how LT and RT respond on screen</string>
     <string name="settings_trigger_analog">Analog</string>
