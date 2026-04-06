@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -144,6 +145,7 @@ fun GamepadScreen(
 
     val showBtWarning by viewModel.showBtWarning.collectAsState()
     val showMacroWarning by viewModel.showMacroWarning.collectAsState()
+    val profileSuggestion by viewModel.profileSuggestion.collectAsState()
 
     var pbWasActive by remember { mutableStateOf(false) }
     val pbCurrentlyActive = playbackProgress.status != PlaybackStatus.IDLE
@@ -165,6 +167,15 @@ fun GamepadScreen(
         MacroWarningDialog(
             onConfirm = { dontShowAgain -> viewModel.confirmMacroWarning(dontShowAgain) },
             onDismiss = { viewModel.dismissMacroWarning() }
+        )
+    }
+
+    profileSuggestion?.let { suggestion ->
+        ProfileSuggestionDialog(
+            deviceName = suggestion.deviceName,
+            suggestedProfile = suggestion.suggestedProfile,
+            onSwitch = { viewModel.acceptProfileSuggestion() },
+            onKeep = { viewModel.declineProfileSuggestion() }
         )
     }
 
@@ -450,6 +461,33 @@ private fun BtWarningDialog(
         dismissButton = {
             OutlinedButton(onClick = onDismiss) {
                 Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun ProfileSuggestionDialog(
+    deviceName: String,
+    suggestedProfile: String,
+    onSwitch: () -> Unit,
+    onKeep: () -> Unit
+) {
+    val profileLabel = if (suggestedProfile == "playstation") "PlayStation" else "Xbox"
+    AlertDialog(
+        onDismissRequest = onKeep,
+        title = { Text(stringResource(R.string.profile_suggest_title)) },
+        text = {
+            Text(stringResource(R.string.profile_suggest_body, deviceName, profileLabel))
+        },
+        confirmButton = {
+            TextButton(onClick = onSwitch) {
+                Text(stringResource(R.string.profile_suggest_switch, profileLabel))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onKeep) {
+                Text(stringResource(R.string.profile_suggest_keep))
             }
         }
     )

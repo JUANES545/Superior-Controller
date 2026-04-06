@@ -147,6 +147,27 @@
     <string name="onboarding_5_title">Ready to go</string>
     <string name="onboarding_5_body">Grant Bluetooth permissions when prompted and start playing. You can fine-tune everything in Settings.</string>
 
+    <!-- Profile suggestion -->
+    <string name="profile_suggest_title">Change controller profile?</string>
+    <string name="profile_suggest_body">The last time you connected to %1$s you used the %2$s profile.\n\nWould you like to switch to that profile? Remember to re-pair the device if needed.</string>
+    <string name="profile_suggest_switch">Switch to %1$s</string>
+    <string name="profile_suggest_keep">Keep current</string>
+
+    <!-- About -->
+    <string name="settings_about">About</string>
+    <string name="about_section_app">Application</string>
+    <string name="about_section_device">Device</string>
+    <string name="about_version">Version</string>
+    <string name="about_build">Build</string>
+    <string name="about_package">Package</string>
+    <string name="about_android">Android</string>
+    <string name="about_brand">Brand</string>
+    <string name="about_model">Model</string>
+    <string name="about_developer">Developer</string>
+    <string name="about_developer_value">Superior Controller Team</string>
+    <string name="about_root_yes">Available</string>
+    <string name="about_root_no">Not available</string>
+
     <!-- Foreground service notification -->
     <string name="notif_channel_name">HID Controller</string>
     <string name="notif_channel_desc">Active while the app is functioning as a Bluetooth gamepad</string>

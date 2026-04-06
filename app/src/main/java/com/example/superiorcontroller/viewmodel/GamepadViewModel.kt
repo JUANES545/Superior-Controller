@@ -122,6 +122,14 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     private val _showMacroWarning = MutableStateFlow(false)
     val showMacroWarning: StateFlow<Boolean> = _showMacroWarning.asStateFlow()
 
+    data class ProfileSuggestion(
+        val address: String,
+        val deviceName: String,
+        val suggestedProfile: String
+    )
+    private val _profileSuggestion = MutableStateFlow<ProfileSuggestion?>(null)
+    val profileSuggestion: StateFlow<ProfileSuggestion?> = _profileSuggestion.asStateFlow()
+
     // ── Known devices / connection management ──────────────────────────
 
     private val _knownDevices = MutableStateFlow<List<KnownDevice>>(emptyList())
@@ -252,7 +260,8 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
                 val kd = KnownDevice(
                     name = btName,
                     address = address,
-                    lastUsedAt = System.currentTimeMillis()
+                    lastUsedAt = System.currentTimeMillis(),
+                    lastProfile = _controllerProfile.value
                 )
                 viewModelScope.launch(Dispatchers.IO) {
                     knownDevicesRepo.save(kd)
@@ -585,7 +594,37 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
+        val known = _knownDevices.value.find { it.address == address }
+        val savedProfile = known?.lastProfile.orEmpty()
+        if (savedProfile.isNotBlank() && savedProfile != _controllerProfile.value) {
+            _profileSuggestion.value = ProfileSuggestion(
+                address = address,
+                deviceName = known?.displayName ?: address,
+                suggestedProfile = savedProfile
+            )
+            return
+        }
+
         proceedWithConnection(address)
+    }
+
+    fun acceptProfileSuggestion() {
+        val suggestion = _profileSuggestion.value ?: return
+        _profileSuggestion.value = null
+        viewModelScope.launch {
+            settingsRepo.setControllerProfile(suggestion.suggestedProfile)
+            if (hidManager.isRegistered) {
+                addLog("PROFILE_SWITCH: re-registering with profile=${suggestion.suggestedProfile}")
+                hidManager.unregisterApp(reason = "PROFILE_SWITCH")
+            }
+            proceedWithConnection(suggestion.address)
+        }
+    }
+
+    fun declineProfileSuggestion() {
+        val suggestion = _profileSuggestion.value ?: return
+        _profileSuggestion.value = null
+        proceedWithConnection(suggestion.address)
     }
 
     fun removeKnownDevice(address: String) {
@@ -1035,7 +1074,13 @@ class GamepadViewModel(application: Application) : AndroidViewModel(application)
     fun clearLog() { _logMessages.value = emptyList() }
 
     fun setControllerProfile(profile: String) {
-        viewModelScope.launch { settingsRepo.setControllerProfile(profile) }
+        viewModelScope.launch {
+            settingsRepo.setControllerProfile(profile)
+            _connectedHostAddress.value?.let { addr ->
+                withContext(Dispatchers.IO) { knownDevicesRepo.updateProfile(addr, profile) }
+                _knownDevices.value = withContext(Dispatchers.IO) { knownDevicesRepo.loadAll() }
+            }
+        }
     }
 
     fun toggleHaptics(enabled: Boolean) {

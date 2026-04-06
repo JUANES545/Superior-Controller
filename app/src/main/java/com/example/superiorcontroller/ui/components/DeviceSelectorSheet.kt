@@ -1,6 +1,8 @@
 package com.example.superiorcontroller.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -123,6 +125,7 @@ fun DeviceSelectorSheet(
                             name = device.displayName,
                             address = device.address,
                             isCurrent = device.address == connectedAddress,
+                            savedProfile = device.lastProfile,
                             onConnect = { onConnect(device.address) },
                             onRemove = { onRemoveKnown(device.address) },
                             onRename = { alias -> onRenameKnown(device.address, alias) }
@@ -200,6 +203,7 @@ private fun DeviceRow(
     name: String,
     address: String,
     isCurrent: Boolean,
+    savedProfile: String = "",
     onConnect: () -> Unit,
     onRemove: () -> Unit,
     onRename: (String) -> Unit
@@ -215,11 +219,27 @@ private fun DeviceRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                name,
-                fontSize = 14.sp,
-                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    name,
+                    fontSize = 14.sp,
+                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                )
+                if (savedProfile.isNotBlank()) {
+                    Spacer(Modifier.width(6.dp))
+                    val label = if (savedProfile == "playstation") "PS" else "Xbox"
+                    val badgeColor = if (savedProfile == "playstation") Color(0xFF2196F3) else Color(0xFF4CAF50)
+                    Text(
+                        label,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = badgeColor,
+                        modifier = Modifier
+                            .background(badgeColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    )
+                }
+            }
             Text(
                 address,
                 fontSize = 11.sp,

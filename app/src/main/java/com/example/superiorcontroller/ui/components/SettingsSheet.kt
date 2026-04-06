@@ -1,5 +1,6 @@
 package com.example.superiorcontroller.ui.components
 
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,9 +43,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -77,6 +81,7 @@ fun SettingsSheet(
 ) {
     var showAssistConfig by remember { mutableStateOf(false) }
     var pendingProfile by remember { mutableStateOf<String?>(null) }
+    var showAbout by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -201,8 +206,41 @@ fun SettingsSheet(
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            Spacer(Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showAbout = true }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_about),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                val ctx = LocalContext.current
+                val versionName = remember {
+                    try {
+                        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
+                    } catch (_: Exception) { "" }
+                }
+                Text(
+                    text = versionName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
         }
+    }
+
+    if (showAbout) {
+        AboutDialog(onDismiss = { showAbout = false })
     }
 
     if (showAssistConfig) {
@@ -421,6 +459,127 @@ private fun ProfileChangeDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AboutDialog(onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val pkgInfo = remember {
+        try { ctx.packageManager.getPackageInfo(ctx.packageName, 0) } catch (_: Exception) { null }
+    }
+    val versionName = pkgInfo?.versionName ?: "—"
+    @Suppress("DEPRECATION")
+    val versionCode = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) pkgInfo?.longVersionCode?.toString() ?: "—"
+        else pkgInfo?.versionCode?.toString() ?: "—"
+    }
+    val isRooted = remember { checkRoot() }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(max = 400.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = "v$versionName",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(16.dp))
+                AboutSectionTitle(stringResource(R.string.about_section_app))
+                Spacer(Modifier.height(6.dp))
+                AboutRow(stringResource(R.string.about_version), versionName)
+                AboutRow(stringResource(R.string.about_build), versionCode)
+                AboutRow(stringResource(R.string.about_package), ctx.packageName)
+                AboutRow(stringResource(R.string.about_developer), stringResource(R.string.about_developer_value))
+
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(Modifier.height(12.dp))
+
+                AboutSectionTitle(stringResource(R.string.about_section_device))
+                Spacer(Modifier.height(6.dp))
+                AboutRow(
+                    label = "Root",
+                    value = if (isRooted) stringResource(R.string.about_root_yes) else stringResource(R.string.about_root_no),
+                    valueColor = if (isRooted) Color(0xFF4CAF50) else Color(0xFFEF5350)
+                )
+                AboutRow(stringResource(R.string.about_brand), Build.MANUFACTURER.replaceFirstChar { it.uppercase() })
+                AboutRow(stringResource(R.string.about_model), Build.MODEL)
+                AboutRow(stringResource(R.string.about_android), "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+
+                Spacer(Modifier.height(16.dp))
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+                    Text(stringResource(R.string.dialog_ok))
+                }
+            }
+        }
+    }
+}
+
+private fun checkRoot(): Boolean {
+    val paths = arrayOf(
+        "/system/app/Superuser.apk", "/sbin/su", "/system/bin/su",
+        "/system/xbin/su", "/data/local/xbin/su", "/data/local/bin/su",
+        "/system/sd/xbin/su", "/system/bin/failsafe/su", "/data/local/su"
+    )
+    if (paths.any { java.io.File(it).exists() }) return true
+    return try {
+        Runtime.getRuntime().exec(arrayOf("which", "su")).inputStream.bufferedReader().readLine() != null
+    } catch (_: Exception) { false }
+}
+
+@Composable
+private fun AboutSectionTitle(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        letterSpacing = 0.5.sp
+    )
+}
+
+@Composable
+private fun AboutRow(label: String, value: String, valueColor: Color? = null) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(0.4f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            color = valueColor ?: MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(0.6f)
+        )
     }
 }
 

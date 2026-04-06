@@ -147,6 +147,27 @@
     <string name="onboarding_5_title">Listo para empezar</string>
     <string name="onboarding_5_body">Concede los permisos Bluetooth cuando se soliciten y empieza a jugar. Puedes ajustar todo desde Configuración.</string>
 
+    <!-- Sugerencia de perfil -->
+    <string name="profile_suggest_title">¿Cambiar perfil de control?</string>
+    <string name="profile_suggest_body">La última vez que te conectaste a %1$s usaste el perfil %2$s.\n\n¿Te gustaría cambiar a ese perfil? Recuerda volver a emparejar el dispositivo si es necesario.</string>
+    <string name="profile_suggest_switch">Cambiar a %1$s</string>
+    <string name="profile_suggest_keep">Mantener actual</string>
+
+    <!-- Acerca de -->
+    <string name="settings_about">Acerca de</string>
+    <string name="about_section_app">Aplicación</string>
+    <string name="about_section_device">Dispositivo</string>
+    <string name="about_version">Versión</string>
+    <string name="about_build">Compilación</string>
+    <string name="about_package">Paquete</string>
+    <string name="about_android">Android</string>
+    <string name="about_brand">Marca</string>
+    <string name="about_model">Modelo</string>
+    <string name="about_developer">Desarrollador</string>
+    <string name="about_developer_value">Superior Controller Team</string>
+    <string name="about_root_yes">Disponible</string>
+    <string name="about_root_no">No disponible</string>
+
     <!-- Notificación del servicio -->
     <string name="notif_channel_name">Control HID</string>
     <string name="notif_channel_desc">Activa mientras la app funciona como control Bluetooth</string>
